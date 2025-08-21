@@ -1,0 +1,615 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  password      String
+  name          String?
+  phone         String?
+  avatar        String?
+  photoUrl      String?
+  role          UserRole  @default(USER)
+  language      String    @default("en") // "en" or "ar"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  tournaments   Tournament[]
+  teams         Team[]
+  pusherProfile Pusher?
+  clanMembers   ClanMember[]
+  messages      Message[]
+  payments      Payment[]
+  serviceOrders ServiceOrder[]
+  contracts     Contract[]
+  ownedClans    Clan[]
+  clanApplications ClanApplication[]
+  receivedMessages Message[] @relation("MessageReceiver")
+  notifications Notification[]
+  twoFactorAuth TwoFactorAuth?
+  permissions   UserPermission[]
+  adminLogs     AdminLog[]
+  registrationLogs RegistrationLog[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Tournament Models
+model Tournament {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  url             String?
+  host            String
+  prizeAmount     Float
+  maxTeams        Int               @default(16)
+  registrationStart DateTime
+  registrationEnd   DateTime?
+  tournamentStart   DateTime
+  tournamentEnd     DateTime?
+  status          TournamentStatus  @default(DRAFT)
+  bracketType     BracketType
+  packageType     TournamentPackage
+  graphicRequests String?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  organizerId     String
+  organizer       User              @relation(fields: [organizerId], references: [id])
+  teams           Team[]
+  stages          TournamentStage[]
+  payments        Payment[]
+  registrationLogs RegistrationLog[]
+
+  @@map("tournaments")
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum BracketType {
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+  SWISS
+  GROUP_STAGE
+  LEADERBOARD
+}
+
+enum TournamentPackage {
+  FREE
+  PAID_GRAPHICS
+  PAID_DISCORD_BOT
+  FULL_MANAGEMENT
+}
+
+model TournamentStage {
+  id          String     @id @default(cuid())
+  name        String
+  type        BracketType
+  order       Int
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matches      Match[]
+
+  @@map("tournament_stages")
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  round       Int
+  matchNumber Int
+  score1      Int?
+  score2      Int?
+  scheduledTime DateTime?
+  nextMatchId String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  stageId     String
+  stage       TournamentStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  team1Id     String?
+  team1       Team?       @relation("TeamMatchesAsTeam1", fields: [team1Id], references: [id])
+  team2Id     String?
+  team2       Team?       @relation("TeamMatchesAsTeam2", fields: [team2Id], references: [id])
+  winnerId    String?
+  winner      Team?       @relation("TeamWinnerMatches", fields: [winnerId], references: [id])
+  nextMatch   Match?      @relation("MatchNextMatch", fields: [nextMatchId], references: [id])
+  previousMatches Match[] @relation("MatchNextMatch")
+
+  @@map("matches")
+}
+
+// Team Models
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  clanTag     String?
+  logo        String?
+  nationality String?
+  userId      String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user         User?       @relation(fields: [userId], references: [id])
+  players      Player[]
+  matchesAsTeam1 Match[]  @relation("TeamMatchesAsTeam1")
+  matchesAsTeam2 Match[]  @relation("TeamMatchesAsTeam2")
+  winnerMatches Match[]   @relation("TeamWinnerMatches")
+  registrationLog RegistrationLog?
+
+  @@map("teams")
+}
+
+// Registration Log Model
+model RegistrationLog {
+  id            String           @id @default(cuid())
+  action        RegistrationAction
+  details       String?          // JSON details
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime         @default(now())
+
+  // Relations
+  tournamentId  String
+  tournament    Tournament       @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId        String           @unique
+  team          Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?            @relation(fields: [userId], references: [id])
+
+  @@map("registration_logs")
+}
+
+enum RegistrationAction {
+  TEAM_REGISTERED
+  TEAM_WITHDRAWN
+  REGISTRATION_MODIFIED
+}
+
+model Player {
+  id          String   @id @default(cuid())
+  name        String
+  username    String
+  tag         String
+  nationality String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  teamId      String?
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("players")
+}
+
+// Pusher (Player for Hire) Models
+model Pusher {
+  id             String      @id @default(cuid())
+  trophies       Int
+  realName       String
+  profilePicture String?
+  price          Float
+  paymentMethod  String
+  negotiation    Boolean     @default(false)
+  availability   Availability
+  status         PusherStatus @default(AVAILABLE)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  userId         String      @unique
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contracts      Contract[]
+  messages       Message[]
+
+  @@map("pushers")
+}
+
+enum Availability {
+  STAY
+  EOS
+}
+
+enum PusherStatus {
+  AVAILABLE
+  HIRED
+  UNAVAILABLE
+}
+
+model Contract {
+  id          String        @id @default(cuid())
+  message     String
+  clanTag     String
+  status      ContractStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  pusherId    String
+  pusher      Pusher        @relation(fields: [pusherId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      User          @relation(fields: [clientId], references: [id])
+  payment     Payment?
+
+  @@map("contracts")
+}
+
+enum ContractStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+// CWL Clan Models
+model Clan {
+  id                String   @id @default(cuid())
+  name              String
+  tag               String   @unique
+  playerCount       Int      @default(15)
+  offeredPayment    Float
+  terms             String?
+  leagueLevel       Int?     // CWL League Level
+  membersNeeded     Int      @default(1) // Number of members needed (1-15)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  ownerId           String
+  owner             User           @relation(fields: [ownerId], references: [id])
+  members           ClanMember[]
+  applications      ClanApplication[]
+
+  @@map("clans")
+}
+
+model ClanMember {
+  id        String   @id @default(cuid())
+  playerId  String
+  playerTag String
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  clanId    String
+  clan      Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([clanId, userId])
+  @@map("clan_members")
+}
+
+model ClanApplication {
+  id          String           @id @default(cuid())
+  name        String
+  playerTag   String
+  paymentMethod String
+  status      ApplicationStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  clanId      String
+  clan        Clan             @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+
+  @@map("clan_applications")
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+// Service Models
+model Service {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  type        ServiceType
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  orders      ServiceOrder[]
+
+  @@map("services")
+}
+
+enum ServiceType {
+  TRAINING
+  BASE_ANALYSIS
+  CUSTOM_BASE_DESIGN
+}
+
+model ServiceOrder {
+  id          String           @id @default(cuid())
+  requirements String?
+  status      OrderStatus      @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  serviceId   String
+  service     Service          @relation(fields: [serviceId], references: [id])
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  payment     Payment?
+
+  @@map("service_orders")
+}
+
+enum OrderStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Payment Models
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Float
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  tournamentId  String?
+  tournament    Tournament?   @relation(fields: [tournamentId], references: [id])
+  contractId    String?       @unique
+  contract      Contract?     @relation(fields: [contractId], references: [id])
+  serviceOrderId String?      @unique
+  serviceOrder  ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  PAYPAL
+  WESTERN_UNION
+  BINANCE
+  CREDIT_CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// Chat Models
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  // Relations
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  receiverId String
+  receiver  User     @relation("MessageReceiver", fields: [receiverId], references: [id])
+  pusherId  String?
+  pusher    Pusher?  @relation(fields: [pusherId], references: [id])
+
+  @@map("messages")
+}
+
+// News Model
+model News {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("news")
+}
+
+// Notification Model
+model Notification {
+  id          String           @id @default(cuid())
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TOURNAMENT_UPDATE
+  CONTRACT_STATUS
+  SERVICE_ORDER
+  PAYMENT_STATUS
+  SYSTEM
+  CHAT_MESSAGE
+}
+
+// Admin Configuration Models
+model AdminConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String
+
+  @@map("admin_configs")
+}
+
+// Package Pricing Model
+model PackagePrice {
+  id          String           @id @default(cuid())
+  packageType TournamentPackage @unique
+  price       Float
+  currency    String           @default("USD")
+  isActive    Boolean          @default(true)
+  updatedAt   DateTime         @updatedAt
+  updatedBy   String
+
+  @@map("package_prices")
+}
+
+// Payment Gateway Model
+model PaymentGateway {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  displayName String
+  description String?
+  isActive    Boolean          @default(true)
+  config      String // JSON configuration
+  updatedAt   DateTime         @updatedAt
+  updatedBy   String
+
+  @@map("payment_gateways")
+}
+
+// Website Content Model
+model WebsiteContent {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  title       String?
+  content     String
+  type        ContentType
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String
+
+  @@map("website_contents")
+}
+
+enum ContentType {
+  TEXT
+  HTML
+  MARKDOWN
+  IMAGE_URL
+}
+
+// File Management Model
+model UploadedFile {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  path        String
+  size        Int
+  mimeType    String
+  category    FileCategory
+  isActive    Boolean  @default(true)
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("uploaded_files")
+}
+
+enum FileCategory {
+  IMAGE
+  DOCUMENT
+  VIDEO
+  AUDIO
+  OTHER
+}
+
+// Admin Activity Log
+model AdminLog {
+  id          String       @id @default(cuid())
+  action      String
+  targetId    String?
+  targetType  String?
+  details     String?      // JSON details
+  ipAddress   String?
+  userAgent   String?
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+
+  @@map("admin_logs")
+}
+
+// Two-Factor Authentication Model
+model TwoFactorAuth {
+  id          String           @id @default(cuid())
+  userId      String           @unique
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String
+  backupCodes String           // JSON array of backup codes
+  isEnabled   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("two_factor_auths")
+}
+
+// User Permission Model
+model UserPermission {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission  String
+  grantedBy   String
+  grantedAt   DateTime         @default(now())
+  expiresAt   DateTime?
+
+  @@unique([userId, permission])
+  @@map("user_permissions")
+}
