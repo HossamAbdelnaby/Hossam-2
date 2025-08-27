@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
       url,
       description,
       prizeAmount,
-      minTownHallLevel,
       bracketType,
       registrationStart,
       registrationEnd,
@@ -69,21 +68,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate town hall level
-    if (minTownHallLevel === null) {
-      return NextResponse.json(
-        { error: 'Town hall level is required' },
-        { status: 400 }
-      );
-    }
-
-    if (minTownHallLevel < 1 || minTownHallLevel > 17) {
-      return NextResponse.json(
-        { error: 'Town hall level must be between 1 and 17' },
-        { status: 400 }
-      );
-    }
-
     // Create tournament
     const tournament = await db.tournament.create({
       data: {
@@ -92,7 +76,6 @@ export async function POST(request: NextRequest) {
         url,
         description,
         prizeAmount: prizeAmount || 0,
-        minTownHallLevel: minTownHallLevel || null,
         maxTeams,
         registrationStart: new Date(registrationStart),
         registrationEnd: registrationEnd ? new Date(registrationEnd) : null,

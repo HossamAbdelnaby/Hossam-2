@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { CountrySelector, CountryDisplay } from "@/components/ui/country-selector";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { CountrySelector } from "@/components/ui/country-selector";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -35,7 +35,8 @@ import {
   Crown,
   CheckCircle,
   Upload,
-  Flag
+  Flag,
+  FileText
 } from "lucide-react";
 
 interface Tournament {
@@ -45,8 +46,6 @@ interface Tournament {
   host: string;
   url?: string;
   prizeAmount: number;
-  minTownHallLevel?: number;
-  maxTownHallLevel?: number;
   maxTeams: number;
   registrationStart: string;
   registrationEnd?: string;
@@ -56,6 +55,7 @@ interface Tournament {
   bracketType: string;
   packageType: string;
   graphicRequests?: string;
+  rules?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,21 +80,6 @@ interface Player {
   nationality?: string;
 }
 
-interface TeamDetails {
-  id: string;
-  name: string;
-  clanTag?: string;
-  logo?: string;
-  nationality?: string;
-  players: Player[];
-  createdAt: string;
-  user?: {
-    id: string;
-    name?: string;
-    email: string;
-  };
-}
-
 export default function TournamentPage() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,9 +87,6 @@ export default function TournamentPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [registrationLogs, setRegistrationLogs] = useState<any[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<TeamDetails | null>(null);
-  const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
-  const [loadingTeamDetails, setLoadingTeamDetails] = useState(false);
   
   // Registration form state
   const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
@@ -116,7 +98,7 @@ export default function TournamentPage() {
     teamName: '',
     clanTag: '',
     teamLogo: '',
-    nationality: '',
+    teamNationality: '',
     players: Array(7).fill(null).map(() => ({
       name: '',
       username: '',
@@ -175,29 +157,6 @@ export default function TournamentPage() {
     }
   };
 
-  const fetchTeamDetails = async (teamId: string) => {
-    try {
-      setLoadingTeamDetails(true);
-      const response = await fetch(`/api/tournaments/${tournamentId}/teams/${teamId}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch team details');
-      }
-
-      const data = await response.json();
-      setSelectedTeam(data.team);
-    } catch (err) {
-      console.error('Failed to fetch team details:', err);
-    } finally {
-      setLoadingTeamDetails(false);
-    }
-  };
-
-  const handleViewTeamDetails = async (teamId: string) => {
-    await fetchTeamDetails(teamId);
-    setIsTeamDetailsOpen(true);
-  };
-
   const handleDelete = async () => {
     setDeleting(true);
     setError("");
@@ -233,7 +192,7 @@ export default function TournamentPage() {
       teamName: '',
       clanTag: '',
       teamLogo: '',
-      nationality: '',
+      teamNationality: '',
       players: Array(7).fill(null).map(() => ({
         name: '',
         username: '',
@@ -275,10 +234,6 @@ export default function TournamentPage() {
         throw new Error('Team name is required');
       }
 
-      if (!formData.nationality.trim()) {
-        throw new Error('Team nationality is required');
-      }
-
       if (!formData.players[formData.captainIndex]?.name.trim()) {
         throw new Error('Captain name is required');
       }
@@ -291,26 +246,13 @@ export default function TournamentPage() {
         throw new Error('Captain tag is required');
       }
 
-      if (!formData.players[formData.captainIndex]?.nationality?.trim()) {
-        throw new Error('Captain nationality is required');
-      }
-
       // Filter out empty players (keep at least the captain)
       const validPlayers = formData.players.filter(player => 
-        player.name.trim() && 
-        player.username.trim() && 
-        player.tag.trim() &&
-        player.nationality?.trim()
+        player.name.trim() && player.username.trim() && player.tag.trim()
       );
 
       if (validPlayers.length === 0) {
         throw new Error('At least one player (captain) is required');
-      }
-
-      // Validate that all valid players have nationality
-      const playersWithoutNationality = validPlayers.filter(player => !player.nationality?.trim());
-      if (playersWithoutNationality.length > 0) {
-        throw new Error('All players must have a nationality');
       }
 
       const response = await fetch(`/api/tournaments/${tournament.id}/teams`, {
@@ -322,7 +264,7 @@ export default function TournamentPage() {
           name: formData.teamName.trim(),
           clanTag: formData.clanTag.trim() || null,
           logo: formData.teamLogo.trim() || null,
-          nationality: formData.nationality.trim() || null,
+          nationality: formData.teamNationality.trim() || null,
           players: validPlayers,
         }),
       });
@@ -346,7 +288,7 @@ export default function TournamentPage() {
           teamName: '',
           clanTag: '',
           teamLogo: '',
-          nationality: '',
+          teamNationality: '',
           players: Array(7).fill(null).map(() => ({
             name: '',
             username: '',
@@ -542,12 +484,11 @@ export default function TournamentPage() {
                         </div>
                         
                         <div>
-                          <Label htmlFor="nationality">Team Nationality *</Label>
                           <CountrySelector
-                            value={formData.nationality}
-                            onValueChange={(value) => handleInputChange('nationality', value)}
-                            placeholder="Select nationality"
-                            required
+                            value={formData.teamNationality}
+                            onValueChange={(value) => handleInputChange('teamNationality', value)}
+                            label="Team Nationality"
+                            placeholder="Select team nationality"
                           />
                         </div>
                       </div>
@@ -578,7 +519,7 @@ export default function TournamentPage() {
                                 </div>
                               </div>
                               
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                   <Label htmlFor={`player-${index}-name`}>Name *</Label>
                                   <Input
@@ -613,11 +554,11 @@ export default function TournamentPage() {
                                 </div>
                                 
                                 <div>
-                                  <Label htmlFor={`player-${index}-nationality`}>Nationality *</Label>
                                   <CountrySelector
-                                    value={player.nationality}
+                                    value={player.nationality || ""}
                                     onValueChange={(value) => handlePlayerChange(index, 'nationality', value)}
-                                    placeholder="Nationality"
+                                    label={`Player ${index + 1} Nationality`}
+                                    placeholder="Select nationality"
                                     required={index === formData.captainIndex}
                                   />
                                 </div>
@@ -795,16 +736,6 @@ export default function TournamentPage() {
                     <span>{tournament.maxTeams} teams</span>
                   </div>
                 </div>
-                
-                {tournament.minTownHallLevel && (
-                  <div>
-                    <h4 className="font-medium mb-2">مستوى قاعدة المدينة</h4>
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-muted-foreground" />
-                      <span>مستوى {tournament.minTownHallLevel}</span>
-                    </div>
-                  </div>
-                )}
               </div>
               
               {tournament.url && (
@@ -854,11 +785,7 @@ export default function TournamentPage() {
                         </div>
                         <span className="font-medium">{team.name}</span>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewTeamDetails(team.id)}
-                      >
+                      <Button variant="outline" size="sm">
                         View Details
                       </Button>
                     </div>
@@ -993,8 +920,11 @@ export default function TournamentPage() {
                 </Button>
               )}
               
-              <Button variant="outline" className="w-full">
-                Tournament Rules
+              <Button variant="outline" className="w-full" asChild>
+                <Link href={`/tournaments/${tournament.id}/rules`}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Tournament Rules
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -1055,106 +985,6 @@ export default function TournamentPage() {
           </Card>
         </div>
       </div>
-
-      {/* Team Details Modal */}
-      <Dialog open={isTeamDetailsOpen} onOpenChange={setIsTeamDetailsOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Team Details
-            </DialogTitle>
-          </DialogHeader>
-          
-          {loadingTeamDetails ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin" />
-            </div>
-          ) : selectedTeam ? (
-            <div className="space-y-6">
-              {/* Team Header */}
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center">
-                  {selectedTeam.logo ? (
-                    <img 
-                      src={selectedTeam.logo} 
-                      alt={selectedTeam.name}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <Users className="w-8 h-8 text-primary" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold">{selectedTeam.name}</h3>
-                  {selectedTeam.clanTag && (
-                    <p className="text-muted-foreground">Clan: {selectedTeam.clanTag}</p>
-                  )}
-                  {selectedTeam.nationality && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Flag className="w-3 h-3" />
-                      {selectedTeam.nationality}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Team Owner */}
-              {selectedTeam.user && (
-                <div>
-                  <h4 className="font-medium mb-2">Team Owner</h4>
-                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedTeam.user.name || selectedTeam.user.email}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Players Section */}
-              <div>
-                <h4 className="font-medium mb-3">Players ({selectedTeam.players.length})</h4>
-                <div className="space-y-3">
-                  {selectedTeam.players.map((player, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{player.name}</p>
-                          <p className="text-sm text-muted-foreground">@{player.username}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-sm">{player.tag}</p>
-                        {player.nationality && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Flag className="w-3 h-3" />
-                            {player.nationality}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Registration Date */}
-              <div>
-                <h4 className="font-medium mb-2">Registration Information</h4>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  <span>Registered on {formatDate(selectedTeam.createdAt)}</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Team details not found</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

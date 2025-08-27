@@ -1,4 +1,7 @@
+'use client';
+
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +18,41 @@ import {
   Star,
   Zap,
   Target,
-  User
+  User,
+  Calendar,
+  MapPin,
+  Clock,
+  Loader2
 } from "lucide-react";
 
+interface Tournament {
+  id: string;
+  name: string;
+  description?: string;
+  host: string;
+  prizeAmount: number;
+  maxTeams: number;
+  registrationStart: string;
+  registrationEnd?: string;
+  tournamentStart: string;
+  tournamentEnd?: string;
+  status: string;
+  bracketType: string;
+  packageType: string;
+  organizer: {
+    id: string;
+    username: string;
+    name?: string;
+  };
+  _count: {
+    teams: number;
+  };
+}
+
 export default function Home() {
+  const [upcomingTournaments, setUpcomingTournaments] = useState<Tournament[]>([]);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
+  
   const features = [
     {
       icon: Trophy,
@@ -93,6 +127,53 @@ export default function Home() {
     }
   ];
 
+  useEffect(() => {
+    fetchUpcomingTournaments();
+  }, []);
+
+  const fetchUpcomingTournaments = async () => {
+    try {
+      setLoadingTournaments(true);
+      const response = await fetch('/api/tournaments/upcoming?limit=6');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch tournaments');
+      }
+      
+      const data = await response.json();
+      setUpcomingTournaments(data.tournaments || []);
+    } catch (error) {
+      console.error('Error fetching upcoming tournaments:', error);
+    } finally {
+      setLoadingTournaments(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'DRAFT': return 'secondary';
+      case 'REGISTRATION_OPEN': return 'default';
+      case 'REGISTRATION_CLOSED': return 'secondary';
+      case 'IN_PROGRESS': return 'default';
+      case 'COMPLETED': return 'outline';
+      default: return 'secondary';
+    }
+  };
+
+  const isUpcoming = (tournament: Tournament) => {
+    const tournamentDate = new Date(tournament.tournamentStart);
+    const now = new Date();
+    return tournamentDate > now;
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
@@ -140,6 +221,131 @@ export default function Home() {
               </Link>
             </Button>
           </div>
+        </div>
+      </section>
+
+      {/* Upcoming Tournaments Section */}
+      <section className="py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-4">Upcoming Tournaments</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Discover and join exciting Clash of Clans tournaments before they start. Be the first to register!
+          </p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {loadingTournaments ? (
+            // Loading state
+            [...Array(6)].map((_, index) => (
+              <Card key={index} className="animate-pulse">
+                <CardHeader>
+                  <div className="h-6 bg-muted rounded w-3/4"></div>
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="h-4 bg-muted rounded"></div>
+                    <div className="h-4 bg-muted rounded w-5/6"></div>
+                    <div className="h-8 bg-muted rounded w-full"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : upcomingTournaments.length > 0 ? (
+            // Tournaments found
+            upcomingTournaments.map((tournament) => (
+              <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg line-clamp-2">
+                        <Link 
+                          href={`/tournaments/${tournament.id}`}
+                          className="hover:text-primary transition-colors"
+                        >
+                          {tournament.name}
+                        </Link>
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-1 mt-1">
+                        <MapPin className="w-3 h-3" />
+                        {tournament.host}
+                      </CardDescription>
+                    </div>
+                    <Badge variant={getStatusColor(tournament.status)} className="text-xs">
+                      {tournament.status.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {tournament.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {tournament.description}
+                    </p>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span>{formatDate(tournament.tournamentStart)}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-sm">
+                      <Trophy className="w-4 h-4 text-muted-foreground" />
+                      <span>${tournament.prizeAmount.toLocaleString()}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-sm">
+                      <Users className="w-4 h-4 text-muted-foreground" />
+                      <span>{tournament._count.teams}/{tournament.maxTeams} teams</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 pt-2">
+                    <Button asChild className="flex-1">
+                      <Link href={`/tournaments/${tournament.id}`}>
+                        View Details
+                      </Link>
+                    </Button>
+                    
+                    {tournament.status === 'REGISTRATION_OPEN' && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/tournaments/${tournament.id}/register`}>
+                          Register
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            // No tournaments found
+            <div className="col-span-full text-center py-12">
+              <Clock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">
+                No upcoming tournaments
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Be the first to create a tournament and get started!
+              </p>
+              <Button asChild>
+                <Link href="/create-tournament">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Tournament
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        <div className="text-center mt-8">
+          <Button variant="outline" size="lg" asChild>
+            <Link href="/tournaments">
+              View All Tournaments
+              <Sword className="w-4 h-4 ml-2" />
+            </Link>
+          </Button>
         </div>
       </section>
 
