@@ -36,6 +36,32 @@ export async function POST(
       );
     }
 
+    // Validate team nationality is required
+    if (!nationality || nationality.trim() === '') {
+      return NextResponse.json(
+        { error: 'Team nationality is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate all players have required fields including nationality
+    for (let i = 0; i < players.length; i++) {
+      const player = players[i];
+      if (!player.name || !player.username || !player.tag) {
+        return NextResponse.json(
+          { error: `All players must have name, username, and tag` },
+          { status: 400 }
+        );
+      }
+      
+      if (!player.nationality || player.nationality.trim() === '') {
+        return NextResponse.json(
+          { error: `All players must have a nationality` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Enforce minimum team members rule
     if (players.length < 5) {
       return NextResponse.json(

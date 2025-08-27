@@ -16,10 +16,11 @@ import {
 interface AvatarUploadProps {
   currentAvatar?: string
   onAvatarChange: (avatarUrl: string) => void
+  onAvatarUploaded?: () => void
   className?: string
 }
 
-export function AvatarUpload({ currentAvatar, onAvatarChange, className = '' }: AvatarUploadProps) {
+export function AvatarUpload({ currentAvatar, onAvatarChange, onAvatarUploaded, className = '' }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -75,8 +76,12 @@ export function AvatarUpload({ currentAvatar, onAvatarChange, className = '' }: 
       const data = await response.json()
 
       if (response.ok) {
-        setSuccess('Avatar uploaded successfully!')
+        setSuccess('Avatar uploaded and saved successfully!')
         onAvatarChange(data.avatarUrl)
+        // Call the callback to refresh user data
+        if (onAvatarUploaded) {
+          onAvatarUploaded()
+        }
         // Clear preview and file input
         setPreviewUrl(null)
         if (fileInputRef.current) {

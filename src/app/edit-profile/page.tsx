@@ -25,7 +25,7 @@ import {
 
 export default function EditProfilePage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, checkAuth } = useAuth()
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -68,6 +68,11 @@ export default function EditProfilePage() {
 
   const handleAvatarSelect = (avatarUrl: string) => {
     setSelectedAvatar(avatarUrl)
+  }
+
+  const handleAvatarUploaded = async () => {
+    // Refresh user data to get the updated avatar
+    await checkAuth()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -230,9 +235,13 @@ export default function EditProfilePage() {
                 {/* Custom Avatar Upload */}
                 <div>
                   <h4 className="text-sm font-medium mb-3">Upload Your Photo</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Your avatar will be saved automatically after upload
+                  </p>
                   <AvatarUpload
                     currentAvatar={selectedAvatar}
                     onAvatarChange={handleAvatarSelect}
+                    onAvatarUploaded={handleAvatarUploaded}
                   />
                 </div>
 

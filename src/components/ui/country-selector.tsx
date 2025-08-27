@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { countries, Country, searchCountries } from "@/lib/countries";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Check } from "lucide-react";
 
 interface CountrySelectorProps {
   value?: string;
@@ -48,26 +49,27 @@ export function CountrySelector({
         </Label>
       )}
       
-      <Select
-        value={value}
-        onValueChange={handleCountrySelect}
-        open={isOpen}
-        onOpenChange={setIsOpen}
-        disabled={disabled}
-      >
-        <SelectTrigger className="w-full" id={`country-${label.replace(/\s+/g, '-')}`}>
-          <SelectValue placeholder={placeholder}>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={isOpen}
+            className="w-full justify-between"
+            disabled={disabled}
+          >
             {selectedCountry ? (
               <div className="flex items-center gap-2">
                 <span className="text-lg">{selectedCountry.flag}</span>
                 <span>{selectedCountry.name}</span>
               </div>
             ) : (
-              placeholder
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent className="max-h-80">
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0">
           <div className="p-2 sticky top-0 bg-background border-b">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -88,22 +90,25 @@ export function CountrySelector({
               </div>
             ) : (
               filteredCountries.map((country) => (
-                <SelectItem
+                <div
                   key={country.code}
-                  value={country.code}
-                  className="flex items-center gap-2 cursor-pointer"
+                  className={`flex items-center gap-2 w-full p-2 cursor-pointer hover:bg-accent hover:text-accent-foreground ${
+                    selectedCountry?.code === country.code ? "bg-accent text-accent-foreground" : ""
+                  }`}
+                  onClick={() => handleCountrySelect(country.code)}
                 >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-lg">{country.flag}</span>
-                    <span className="flex-1">{country.name}</span>
-                    <span className="text-xs text-muted-foreground">{country.code}</span>
-                  </div>
-                </SelectItem>
+                  <span className="text-lg">{country.flag}</span>
+                  <span className="flex-1">{country.name}</span>
+                  <span className="text-xs text-muted-foreground">{country.code}</span>
+                  {selectedCountry?.code === country.code && (
+                    <Check className="h-4 w-4" />
+                  )}
+                </div>
               ))
             )}
           </div>
-        </SelectContent>
-      </Select>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

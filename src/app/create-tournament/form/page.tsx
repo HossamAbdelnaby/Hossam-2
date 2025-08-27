@@ -107,6 +107,7 @@ export default function TournamentFormPage() {
     
     // Game Info
     prizeAmount: "",
+    minTownHallLevel: null as number | null,
     bracketType: "", // Single bracket type for free package
     bracketTypes: [], // Multiple bracket types for paid packages
     maxTeams: 16, // Default to 16 teams
@@ -196,6 +197,7 @@ export default function TournamentFormPage() {
           ...formData,
           packageType: mapPackageToDatabase(packageType),
           prizeAmount: parseFloat(formData.prizeAmount) || 0,
+          minTownHallLevel: formData.minTownHallLevel || null,
           registrationStart: new Date(formData.registrationStart),
           registrationEnd: formData.registrationEnd ? new Date(formData.registrationEnd) : null,
           tournamentStart: new Date(formData.tournamentStart),
@@ -527,6 +529,27 @@ export default function TournamentFormPage() {
               />
             </div>
             
+            <div className="grid md:grid-cols-1 gap-4">
+                <div>
+                  <Label htmlFor="minTownHallLevel" className="text-sm">Town Hall</Label>
+                  <Select 
+                    value={formData.minTownHallLevel?.toString() || ""} 
+                    onValueChange={(value) => handleInputChange('minTownHallLevel', parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر Town Hall" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 17 }, (_, i) => 17 - i).map(level => (
+                        <SelectItem key={level} value={level.toString()}>
+                          مستوى {level}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            
             <div className="space-y-2">
               <Label>
                 {packageType === 'free' ? 'Bracket Type *' : 'Bracket Types *'}
@@ -626,7 +649,7 @@ export default function TournamentFormPage() {
           <Button type="button" variant="outline" asChild>
             <Link href="/create-tournament">Cancel</Link>
           </Button>
-          <Button type="submit" disabled={loading || !formData.bracketType || !formData.maxTeams}>
+          <Button type="submit" disabled={loading || !formData.bracketType || !formData.maxTeams || !formData.minTownHallLevel || !formData.maxTownHallLevel}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -3,6 +3,7 @@ import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { readdir, mkdir } from 'fs/promises'
 import jwt from 'jsonwebtoken'
+import { db } from '@/lib/db'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -74,6 +75,17 @@ export async function POST(request: NextRequest) {
 
     // Return the URL path to the uploaded file
     const avatarUrl = `/uploads/avatars/${filename}`
+
+    // Update user's avatar in the database
+    try {
+      await db.user.update({
+        where: { id: decoded.userId },
+        data: { avatar: avatarUrl }
+      })
+    } catch (dbError) {
+      console.error('Database update error:', dbError)
+      // Continue even if database update fails, at least the file is uploaded
+    }
 
     return NextResponse.json({
       message: 'Avatar uploaded successfully',

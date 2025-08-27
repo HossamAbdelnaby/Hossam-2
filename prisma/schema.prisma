@@ -61,6 +61,8 @@ model Tournament {
   url             String?
   host            String
   prizeAmount     Float
+  minTownHallLevel Int?
+  maxTownHallLevel Int?
   maxTeams        Int               @default(16)
   registrationStart DateTime
   registrationEnd   DateTime?
