@@ -10,10 +10,6 @@ interface Team {
   name: string
   clanTag?: string
   logo?: string
-  captain?: {
-    name: string
-    username: string
-  }
 }
 
 interface Match {
@@ -22,34 +18,33 @@ interface Match {
   matchNumber: number
   score1?: number
   score2?: number
-  team1?: Team
-  team2?: Team
-  winner?: Team
-  isActive: boolean
+  team1?: Team | null
+  team2?: Team | null
+  winner?: Team | null
+  isBye?: boolean
+  nextMatchId?: string
 }
 
 interface SingleEliminationBracketProps {
-  matches: Match[]
+  rounds: {
+    roundNumber: number;
+    name: string;
+    matches: Match[];
+  }[]
+  onMatchClick?: (match: Match) => void
   onMatchUpdate?: (matchId: string, score1: number, score2: number) => void
   isAdmin?: boolean
+  canManage?: boolean
 }
 
-export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = false }: SingleEliminationBracketProps) {
-  const rounds = Math.max(...matches.map(m => m.round))
-  const bracket: { [round: number]: Match[] } = {}
-  
-  matches.forEach(match => {
-    if (!bracket[match.round]) {
-      bracket[match.round] = []
-    }
-    bracket[match.round].push(match)
-  })
+export function SingleEliminationBracket({ rounds, onMatchClick, onMatchUpdate, isAdmin = false, canManage = false }: SingleEliminationBracketProps) {
 
-  const getRoundName = (round: number, totalRounds: number): string => {
-    if (round === totalRounds) return 'Final'
-    if (round === totalRounds - 1) return 'Semi-Final'
-    if (round === totalRounds - 2) return 'Quarter-Final'
-    return `Round ${round}`
+  const getRoundName = (roundNumber: number): string => {
+    const totalRounds = rounds.length;
+    if (roundNumber === totalRounds) return 'Final'
+    if (roundNumber === totalRounds - 1) return 'Semi-Final'
+    if (roundNumber === totalRounds - 2) return 'Quarter-Final'
+    return `Round ${roundNumber}`
   }
 
   const renderMatch = (match: Match) => {
@@ -84,7 +79,7 @@ export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = fal
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              {isAdmin && (
+              {canManage && (
                 <Input
                   type="number"
                   min="0"
@@ -97,7 +92,7 @@ export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = fal
                   placeholder="-"
                 />
               )}
-              {match.score1 !== undefined && !isAdmin && (
+              {match.score1 !== undefined && !canManage && (
                 <span className="text-sm font-bold w-8 text-center">{match.score1}</span>
               )}
               {isTeam1Winner && (
@@ -136,7 +131,7 @@ export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = fal
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              {isAdmin && (
+              {canManage && (
                 <Input
                   type="number"
                   min="0"
@@ -149,7 +144,7 @@ export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = fal
                   placeholder="-"
                 />
               )}
-              {match.score2 !== undefined && !isAdmin && (
+              {match.score2 !== undefined && !canManage && (
                 <span className="text-sm font-bold w-8 text-center">{match.score2}</span>
               )}
               {isTeam2Winner && (
@@ -165,19 +160,27 @@ export function SingleEliminationBracket({ matches, onMatchUpdate, isAdmin = fal
   return (
     <div className="w-full overflow-x-auto">
       <div className="flex gap-8 min-w-max p-4">
-        {Object.entries(bracket).map(([round, roundMatches]) => (
-          <div key={round} className="flex flex-col gap-4">
+        {rounds.map((round) => (
+          <div key={round.roundNumber} className="flex flex-col gap-4">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-primary">
-                {getRoundName(parseInt(round), rounds)}
+                {round.name}
               </h3>
               <p className="text-xs text-muted-foreground">
-                {roundMatches.length} match{roundMatches.length !== 1 ? 'es' : ''}
+                {round.matches.length} match{round.matches.length !== 1 ? 'es' : ''}
               </p>
             </div>
-            {roundMatches
+            {round.matches
               .sort((a, b) => a.matchNumber - b.matchNumber)
-              .map((match) => renderMatch(match))
+              .map((match) => (
+                <div 
+                  key={match.id} 
+                  onClick={() => onMatchClick?.(match)}
+                  className={onMatchClick ? "cursor-pointer hover:opacity-80" : ""}
+                >
+                  {renderMatch(match)}
+                </div>
+              ))
             }
           </div>
         ))}
