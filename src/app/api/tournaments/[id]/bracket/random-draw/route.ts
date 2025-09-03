@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { 
-  generateBracketStructure, 
-  updateBracketWithMatchData,
-  assignTeamsToFirstRound
-} from '@/lib/bracket-data';
 import { emitBracketUpdate } from '@/lib/socket';
 
 export async function POST(
@@ -70,73 +65,92 @@ export async function POST(
       where: { stageId: stage.id },
     });
 
-    // Generate bracket structure
-    const bracketData = await generateBracketStructure(
-      tournamentId, 
-      tournament.bracketType, 
-      tournament.maxTeams
-    );
-
     // Shuffle teams for random draw
     const shuffledTeams = [...tournament.teams].sort(() => Math.random() - 0.5);
 
-    // Create matches based on bracket structure
+    // Create matches based on bracket type
     const matchesToCreate = [];
     
-    if (bracketData.type === 'SINGLE_ELIMINATION') {
-      // Assign teams to first round in bracket structure
-      assignTeamsToFirstRound(bracketData.bracket.rounds[0].matches, shuffledTeams);
+    if (tournament.bracketType === 'SINGLE_ELIMINATION') {
+      // Single elimination bracket structure
+      const totalRounds = Math.ceil(Math.log2(tournament.maxTeams));
+      let matchIdCounter = 1;
       
-      // Create all matches for all rounds using the updated bracket structure
-      for (const round of bracketData.bracket.rounds) {
-        for (const match of round.matches) {
-          matchesToCreate.push({
-            id: `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            round: match.round,
-            matchNumber: match.matchNumber,
-            stageId: stage.id,
-            team1Id: match.team1?.id || null,
-            team2Id: match.team2?.id || null,
-            nextMatchId: match.nextMatchId || null,
-          });
-        }
-      }
-    } else if (bracketData.type === 'DOUBLE_ELIMINATION') {
-      // Handle double elimination - assign teams to winners bracket first round
-      const winnersBracket = bracketData.bracket.winnersBracket;
-      const firstRound = winnersBracket.rounds[0];
-      let teamIndex = 0;
-      
-      for (const match of firstRound.matches) {
-        if (teamIndex < shuffledTeams.length) {
-          const team1 = shuffledTeams[teamIndex++];
-          const team2 = teamIndex < shuffledTeams.length ? shuffledTeams[teamIndex++] : null;
+      // Create matches for each round
+      for (let round = 1; round <= totalRounds; round++) {
+        const matchesInRound = Math.ceil(tournament.maxTeams / Math.pow(2, round));
+        
+        for (let matchNum = 0; matchNum < matchesInRound; matchNum++) {
+          const matchId = `match-${Date.now()}-${matchIdCounter++}`;
+          
+          let team1Id = null;
+          let team2Id = null;
+          
+          // Only assign teams to first round
+          if (round === 1) {
+            const teamIndex = matchNum * 2;
+            team1Id = shuffledTeams[teamIndex]?.id || null;
+            team2Id = shuffledTeams[teamIndex + 1]?.id || null;
+          }
           
           matchesToCreate.push({
-            id: `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            round: match.round,
-            matchNumber: match.matchNumber,
+            id: matchId,
+            round: round,
+            matchNumber: matchNum + 1,
             stageId: stage.id,
-            team1Id: team1?.id || null,
-            team2Id: team2?.id || null,
+            team1Id,
+            team2Id,
           });
         }
       }
-    } else if (bracketData.type === 'GROUP_STAGE') {
-      // Handle group stage - assign teams to groups and create round-robin matches
-      const groups = bracketData.bracket.groups;
-      let teamIndex = 0;
+    } else if (tournament.bracketType === 'DOUBLE_ELIMINATION') {
+      // Double elimination - simplified version
+      const totalRounds = Math.ceil(Math.log2(tournament.maxTeams));
+      let matchIdCounter = 1;
       
-      for (const group of groups) {
-        const groupTeams = shuffledTeams.slice(teamIndex, teamIndex + 4);
-        teamIndex += 4;
+      // Winners bracket
+      for (let round = 1; round <= totalRounds; round++) {
+        const matchesInRound = Math.ceil(tournament.maxTeams / Math.pow(2, round));
+        
+        for (let matchNum = 0; matchNum < matchesInRound; matchNum++) {
+          const matchId = `match-${Date.now()}-${matchIdCounter++}`;
+          
+          let team1Id = null;
+          let team2Id = null;
+          
+          // Only assign teams to first round
+          if (round === 1) {
+            const teamIndex = matchNum * 2;
+            team1Id = shuffledTeams[teamIndex]?.id || null;
+            team2Id = shuffledTeams[teamIndex + 1]?.id || null;
+          }
+          
+          matchesToCreate.push({
+            id: matchId,
+            round: round,
+            matchNumber: matchNum + 1,
+            stageId: stage.id,
+            team1Id,
+            team2Id,
+          });
+        }
+      }
+    } else if (tournament.bracketType === 'GROUP_STAGE') {
+      // Group stage - create groups and round-robin matches
+      const groupsCount = 4;
+      const teamsPerGroup = Math.ceil(shuffledTeams.length / groupsCount);
+      
+      for (let groupIndex = 0; groupIndex < groupsCount; groupIndex++) {
+        const startIdx = groupIndex * teamsPerGroup;
+        const endIdx = Math.min(startIdx + teamsPerGroup, shuffledTeams.length);
+        const groupTeams = shuffledTeams.slice(startIdx, endIdx);
         
         // Create round-robin matches for the group
         for (let i = 0; i < groupTeams.length; i++) {
           for (let j = i + 1; j < groupTeams.length; j++) {
             matchesToCreate.push({
-              id: `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              round: 1,
+              id: `match-${Date.now()}-${matchesToCreate.length + 1}`,
+              round: groupIndex + 1,
               matchNumber: matchesToCreate.length + 1,
               stageId: stage.id,
               team1Id: groupTeams[i].id,
@@ -145,30 +159,29 @@ export async function POST(
           }
         }
       }
-    } else if (bracketData.type === 'SWISS') {
-      // Handle Swiss system - assign random pairings for first round
-      const rounds = bracketData.bracket.rounds;
-      const firstRound = rounds[0];
-      let teamIndex = 0;
+    } else if (tournament.bracketType === 'SWISS') {
+      // Swiss system - create rounds with random pairings
+      const roundsCount = Math.min(5, Math.ceil(Math.log2(shuffledTeams.length)) + 2);
       
-      for (const match of firstRound.matches) {
-        if (teamIndex < shuffledTeams.length) {
-          const team1 = shuffledTeams[teamIndex++];
-          const team2 = teamIndex < shuffledTeams.length ? shuffledTeams[teamIndex++] : null;
+      for (let round = 1; round <= roundsCount; round++) {
+        const matchesInRound = Math.floor(shuffledTeams.length / 2);
+        
+        for (let matchNum = 0; matchNum < matchesInRound; matchNum++) {
+          const teamIndex = matchNum * 2;
           
           matchesToCreate.push({
-            id: `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            round: match.round,
-            matchNumber: match.matchNumber,
+            id: `match-${Date.now()}-${matchesToCreate.length + 1}`,
+            round: round,
+            matchNumber: matchNum + 1,
             stageId: stage.id,
-            team1Id: team1?.id || null,
-            team2Id: team2?.id || null,
+            team1Id: shuffledTeams[teamIndex]?.id || null,
+            team2Id: shuffledTeams[teamIndex + 1]?.id || null,
           });
         }
       }
     }
 
-    // Create all matches one by one to handle any potential conflicts
+    // Create all matches
     for (const matchData of matchesToCreate) {
       try {
         await db.match.create({
@@ -176,7 +189,6 @@ export async function POST(
         });
       } catch (error) {
         console.error('Error creating match:', error);
-        // Continue with other matches even if one fails
       }
     }
 
@@ -188,16 +200,12 @@ export async function POST(
       });
     }
 
-    // Get updated bracket data
-    const updatedBracket = await updateBracketWithMatchData(bracketData, tournamentId);
-    
     // Emit real-time update
     emitBracketUpdate(tournamentId);
     
     return NextResponse.json({
       success: true,
       message: 'Random draw completed successfully',
-      bracket: updatedBracket,
       tournament: {
         id: tournament.id,
         bracketType: tournament.bracketType,

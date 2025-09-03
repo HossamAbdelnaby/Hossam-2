@@ -44,8 +44,6 @@ export default function TournamentBracketPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    console.log('Bracket page mounted, params:', params)
-    console.log('User state:', { user, loading })
     if (params.id) {
       fetchTournament()
     }

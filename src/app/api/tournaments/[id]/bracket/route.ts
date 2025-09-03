@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { 
-  generateBracketStructure, 
-  updateBracketWithMatchData 
-} from '@/lib/bracket-data';
 
 export async function GET(
   request: NextRequest,
@@ -30,7 +26,7 @@ export async function GET(
       );
     }
 
-    // Get actual matches from database
+    // Get actual matches from database with all related data
     const matches = await db.match.findMany({
       where: {
         stage: {
@@ -69,70 +65,56 @@ export async function GET(
       ],
     });
 
-    // Generate bracket structure first
-    const structure = await generateBracketStructure(
-      tournamentId, 
-      tournament.bracketType, 
-      tournament.maxTeams
-    );
-    
-    // Create a map of database matches by their round and matchNumber
-    const matchMap = new Map();
+    // Group matches by round
+    const matchesByRound = new Map<number, any[]>();
     matches.forEach(match => {
-      const key = `${match.round}-${match.matchNumber}`;
-      matchMap.set(key, match);
+      if (!matchesByRound.has(match.round)) {
+        matchesByRound.set(match.round, []);
+      }
+      matchesByRound.get(match.round)!.push(match);
     });
 
-    // Update the bracket structure with real match data
-    if (tournament.bracketType === 'SINGLE_ELIMINATION') {
-      const updatedRounds = structure.bracket.rounds.map(round => {
-        const updatedMatches = round.matches.map(match => {
-          const key = `${match.round}-${match.matchNumber}`;
-          const dbMatch = matchMap.get(key);
-          
-          if (dbMatch) {
-            return {
-              id: dbMatch.id,
-              round: dbMatch.round,
-              matchNumber: dbMatch.matchNumber,
-              score1: dbMatch.score1,
-              score2: dbMatch.score2,
-              team1: dbMatch.team1,
-              team2: dbMatch.team2,
-              winner: dbMatch.winner,
-              isBye: false,
-              nextMatchId: dbMatch.nextMatchId,
-            };
-          }
-          
-          return match;
-        });
-        
-        return {
-          ...round,
-          matches: updatedMatches,
-        };
-      });
+    // Create bracket structure based on actual matches
+    const rounds = [];
+    const maxRound = Math.max(...matchesByRound.keys(), 0);
+    
+    for (let round = 1; round <= maxRound; round++) {
+      const roundMatches = matchesByRound.get(round) || [];
+      
+      let roundName;
+      if (tournament.bracketType === 'SINGLE_ELIMINATION') {
+        const totalRounds = Math.ceil(Math.log2(tournament.maxTeams));
+        if (round === totalRounds) roundName = 'Final';
+        else if (round === totalRounds - 1) roundName = 'Semifinal';
+        else if (round === totalRounds - 2) roundName = 'Quarterfinal';
+        else roundName = `Round ${round}`;
+      } else {
+        roundName = `Round ${round}`;
+      }
 
-      return NextResponse.json({
-        bracket: {
-          type: 'SINGLE_ELIMINATION',
-          bracket: { rounds: updatedRounds },
-        },
-        tournament: {
-          id: tournament.id,
-          bracketType: tournament.bracketType,
-          maxTeams: tournament.maxTeams,
-          status: tournament.status,
-        },
+      rounds.push({
+        roundNumber: round,
+        name: roundName,
+        matches: roundMatches.map(match => ({
+          id: match.id,
+          round: match.round,
+          matchNumber: match.matchNumber,
+          score1: match.score1,
+          score2: match.score2,
+          team1: match.team1,
+          team2: match.team2,
+          winner: match.winner,
+          isBye: false,
+          nextMatchId: match.nextMatchId,
+        })),
       });
     }
-    
-    // For other bracket types, use the original update function
-    const updatedBracket = await updateBracketWithMatchData(structure, tournamentId);
-    
+
     return NextResponse.json({
-      bracket: updatedBracket,
+      bracket: {
+        type: tournament.bracketType,
+        bracket: { rounds },
+      },
       tournament: {
         id: tournament.id,
         bracketType: tournament.bracketType,
