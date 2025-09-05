@@ -52,10 +52,12 @@ export default function TournamentBracketPage() {
   const fetchTournament = async () => {
     try {
       setIsLoading(true)
+      console.log('Fetching tournament data...')
       const response = await fetch(`/api/tournaments/${params.id}`)
       
       if (response.ok) {
         const data = await response.json()
+        console.log('Tournament data received:', data)
         setTournament(data.tournament)
       } else if (response.status === 404) {
         setError('Tournament not found')
@@ -78,6 +80,15 @@ export default function TournamentBracketPage() {
 
   const isAdmin = user && tournament && tournament.organizerId === user.id
   const canEdit = isAdmin && tournament?.status === 'IN_PROGRESS'
+
+  console.log('Page state:', { 
+    tournament: tournament?.name, 
+    isLoading, 
+    error, 
+    isAdmin, 
+    canEdit,
+    user: user?.email 
+  })
 
   if (loading || isLoading) {
     return (

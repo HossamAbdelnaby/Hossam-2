@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CountrySelector, CountryDisplay } from "@/components/ui/country-selector";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { CountrySelector } from "@/components/ui/country-selector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
@@ -70,7 +70,7 @@ export default function TournamentRegistrationPage() {
     teamName: "",
     clanTag: "",
     teamLogo: "",
-    nationality: "",
+    teamNationality: "",
     
     // Players
     players: Array(7).fill(null).map(() => ({
@@ -178,7 +178,7 @@ export default function TournamentRegistrationPage() {
           name: formData.teamName.trim(),
           clanTag: formData.clanTag.trim() || null,
           logo: formData.teamLogo.trim() || null,
-          nationality: formData.nationality.trim() || null,
+          nationality: formData.teamNationality.trim() || null,
           players: validPlayers,
         }),
       });
@@ -359,13 +359,6 @@ export default function TournamentRegistrationPage() {
             </div>
             
             <div className="grid md:grid-cols-2 gap-4">
-              <CountrySelector
-                value={formData.nationality}
-                onValueChange={(value) => handleInputChange('nationality', value)}
-                label="Team Nationality"
-                placeholder="Select team nationality"
-              />
-              
               <ImageUpload
                 value={formData.teamLogo}
                 onValueChange={(value) => handleInputChange('teamLogo', value)}
@@ -373,6 +366,13 @@ export default function TournamentRegistrationPage() {
                 placeholder="Upload team logo"
                 width={200}
                 height={200}
+              />
+              
+              <CountrySelector
+                value={formData.teamNationality}
+                onValueChange={(value) => handleInputChange('teamNationality', value)}
+                label="Team Nationality"
+                placeholder="Select team nationality"
               />
             </div>
           </CardContent>
@@ -444,7 +444,7 @@ export default function TournamentRegistrationPage() {
                   )}
                 </div>
                 
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor={`player-${index}-name`}>Player Name *</Label>
                     <Input
@@ -477,15 +477,16 @@ export default function TournamentRegistrationPage() {
                       required={index === 0}
                     />
                   </div>
-                </div>
-                
-                <div className="mt-4">
-                  <CountrySelector
-                    value={player.nationality}
-                    onValueChange={(value) => handlePlayerChange(index, 'nationality', value)}
-                    label={`Player ${index + 1} Nationality`}
-                    placeholder="Select player nationality"
-                  />
+                  
+                  <div className="space-y-2">
+                    <CountrySelector
+                      value={player.nationality || ""}
+                      onValueChange={(value) => handlePlayerChange(index, 'nationality', value)}
+                      label={`Player ${index + 1} Nationality`}
+                      placeholder="Select nationality"
+                      required={index === 0}
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -501,7 +502,6 @@ export default function TournamentRegistrationPage() {
                       name: "",
                       username: "",
                       tag: "",
-                      nationality: "",
                     }]
                   }));
                 }}

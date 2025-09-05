@@ -31,17 +31,74 @@ export async function POST(
     // Validate required fields
     if (!name || !players || players.length === 0) {
       return NextResponse.json(
-        { error: 'Team name and at least one player are required' },
+        { error: 'Team name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate captain (first player) has required fields
+    if (!players[0]?.name?.trim()) {
+      return NextResponse.json(
+        { error: 'Captain name is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!players[0]?.username?.trim()) {
+      return NextResponse.json(
+        { error: 'Captain username is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!players[0]?.tag?.trim()) {
+      return NextResponse.json(
+        { error: 'Captain tag is required' },
+        { status: 400 }
+      );
+    }
+
+    // Filter out empty players (keep at least the captain)
+    const validPlayers = players.filter(player => 
+      player.name?.trim() && player.username?.trim() && player.tag?.trim()
+    );
+
+    if (validPlayers.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one player (captain) is required' },
         { status: 400 }
       );
     }
 
     // Enforce minimum team members rule
-    if (players.length < 5) {
+    if (validPlayers.length < 5) {
       return NextResponse.json(
         { error: 'Teams must have at least 5 players to participate' },
         { status: 400 }
       );
+    }
+
+    // Validate all players have required fields
+    for (let i = 0; i < validPlayers.length; i++) {
+      const player = validPlayers[i];
+      if (!player.name?.trim()) {
+        return NextResponse.json(
+          { error: `Player ${i + 1} name is required` },
+          { status: 400 }
+        );
+      }
+      if (!player.username?.trim()) {
+        return NextResponse.json(
+          { error: `Player ${i + 1} username is required` },
+          { status: 400 }
+        );
+      }
+      if (!player.tag?.trim()) {
+        return NextResponse.json(
+          { error: `Player ${i + 1} tag is required` },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if tournament exists and registration is open
@@ -66,10 +123,10 @@ export async function POST(
     // Create team with players
     const team = await db.team.create({
       data: {
-        name,
-        clanTag,
-        logo,
-        nationality,
+        name: name.trim(),
+        clanTag: clanTag?.trim() || null,
+        logo: logo?.trim() || null,
+        nationality: nationality?.trim() || null,
         tournament: {
           connect: {
             id: tournamentId,
@@ -81,11 +138,11 @@ export async function POST(
           },
         },
         players: {
-          create: players.map((player: any, index: number) => ({
-            name: player.name,
-            username: player.username,
-            tag: player.tag,
-            nationality: player.nationality,
+          create: validPlayers.map((player: any, index: number) => ({
+            name: player.name.trim(),
+            username: player.username.trim(),
+            tag: player.tag.trim(),
+            nationality: player.nationality?.trim() || null,
           })),
         },
       },
@@ -105,9 +162,9 @@ export async function POST(
       data: {
         action: 'TEAM_REGISTERED',
         details: JSON.stringify({
-          teamName: name,
-          clanTag,
-          playerCount: players.length,
+          teamName: name.trim(),
+          clanTag: clanTag?.trim() || null,
+          playerCount: validPlayers.length,
           registrationTime: new Date().toISOString(),
         }),
         ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',

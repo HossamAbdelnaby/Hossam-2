@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { CountrySelector, CountryDisplay } from "@/components/ui/country-selector";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { CountrySelector } from "@/components/ui/country-selector";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -35,7 +35,8 @@ import {
   Crown,
   CheckCircle,
   Upload,
-  Flag
+  Flag,
+  FileText
 } from "lucide-react";
 
 interface Tournament {
@@ -54,6 +55,7 @@ interface Tournament {
   bracketType: string;
   packageType: string;
   graphicRequests?: string;
+  rules?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -65,6 +67,17 @@ interface Tournament {
   teams: Array<{
     id: string;
     name: string;
+    clanTag?: string;
+    logo?: string;
+    nationality?: string;
+    players: Array<{
+      id: string;
+      name: string;
+      username: string;
+      tag: string;
+      nationality?: string;
+      createdAt: string;
+    }>;
   }>;
   _count: {
     teams: number;
@@ -78,6 +91,21 @@ interface Player {
   nationality?: string;
 }
 
+interface TeamDetails {
+  id: string;
+  name: string;
+  clanTag?: string;
+  logo?: string;
+  nationality?: string;
+  players: Player[];
+  createdAt: string;
+  user?: {
+    id: string;
+    username: string;
+    name?: string;
+  };
+}
+
 export default function TournamentPage() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +113,11 @@ export default function TournamentPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [registrationLogs, setRegistrationLogs] = useState<any[]>([]);
+  
+  // Team details state
+  const [selectedTeam, setSelectedTeam] = useState<TeamDetails | null>(null);
+  const [isTeamDetailsOpen, setIsTeamDetailsOpen] = useState(false);
+  const [loadingTeamDetails, setLoadingTeamDetails] = useState(false);
   
   // Registration form state
   const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
@@ -96,7 +129,7 @@ export default function TournamentPage() {
     teamName: '',
     clanTag: '',
     teamLogo: '',
-    nationality: '',
+    teamNationality: '',
     players: Array(7).fill(null).map(() => ({
       name: '',
       username: '',
@@ -155,6 +188,40 @@ export default function TournamentPage() {
     }
   };
 
+  const fetchTeamDetails = async (teamId: string) => {
+    try {
+      setLoadingTeamDetails(true);
+      const response = await fetch(`/api/tournaments/${tournamentId}/teams`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch team details');
+      }
+      
+      const data = await response.json();
+      const team = data.teams.find((t: any) => t.id === teamId);
+      
+      if (team) {
+        setSelectedTeam(team);
+        setIsTeamDetailsOpen(true);
+      } else {
+        throw new Error('Team not found');
+      }
+    } catch (err) {
+      console.error('Failed to fetch team details:', err);
+      toast({
+        title: "Error",
+        description: "Failed to fetch team details",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingTeamDetails(false);
+    }
+  };
+
+  const handleViewTeamDetails = (teamId: string) => {
+    fetchTeamDetails(teamId);
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     setError("");
@@ -190,7 +257,7 @@ export default function TournamentPage() {
       teamName: '',
       clanTag: '',
       teamLogo: '',
-      nationality: '',
+      teamNationality: '',
       players: Array(7).fill(null).map(() => ({
         name: '',
         username: '',
@@ -262,7 +329,7 @@ export default function TournamentPage() {
           name: formData.teamName.trim(),
           clanTag: formData.clanTag.trim() || null,
           logo: formData.teamLogo.trim() || null,
-          nationality: formData.nationality.trim() || null,
+          nationality: formData.teamNationality.trim() || null,
           players: validPlayers,
         }),
       });
@@ -286,7 +353,7 @@ export default function TournamentPage() {
           teamName: '',
           clanTag: '',
           teamLogo: '',
-          nationality: '',
+          teamNationality: '',
           players: Array(7).fill(null).map(() => ({
             name: '',
             username: '',
@@ -482,11 +549,11 @@ export default function TournamentPage() {
                         </div>
                         
                         <div>
-                          <Label htmlFor="nationality">Team Nationality</Label>
                           <CountrySelector
-                            value={formData.nationality}
-                            onChange={(value) => handleInputChange('nationality', value)}
-                            placeholder="Select nationality"
+                            value={formData.teamNationality}
+                            onValueChange={(value) => handleInputChange('teamNationality', value)}
+                            label="Team Nationality"
+                            placeholder="Select team nationality"
                           />
                         </div>
                       </div>
@@ -517,7 +584,7 @@ export default function TournamentPage() {
                                 </div>
                               </div>
                               
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                   <Label htmlFor={`player-${index}-name`}>Name *</Label>
                                   <Input
@@ -552,11 +619,12 @@ export default function TournamentPage() {
                                 </div>
                                 
                                 <div>
-                                  <Label htmlFor={`player-${index}-nationality`}>Nationality</Label>
                                   <CountrySelector
-                                    value={player.nationality}
-                                    onChange={(value) => handlePlayerChange(index, 'nationality', value)}
-                                    placeholder="Nationality"
+                                    value={player.nationality || ""}
+                                    onValueChange={(value) => handlePlayerChange(index, 'nationality', value)}
+                                    label={`Player ${index + 1} Nationality`}
+                                    placeholder="Select nationality"
+                                    required={index === formData.captainIndex}
                                   />
                                 </div>
                               </div>
@@ -773,20 +841,97 @@ export default function TournamentPage() {
               </div>
               
               {tournament.teams.length > 0 ? (
-                <div className="grid gap-3">
-                  {tournament.teams.map(team => (
-                    <div key={team.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <Users className="w-5 h-5 text-primary" />
-                        </div>
-                        <span className="font-medium">{team.name}</span>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </div>
-                  ))}
+                <div className="grid gap-4">
+                  {tournament.teams.map(team => {
+                    const captain = team.players[0]; // First player is captain
+                    return (
+                      <Card key={team.id} className="overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            {/* Team Info */}
+                            <div className="flex items-start gap-4 flex-1">
+                              {/* Team Logo */}
+                              <div className="flex-shrink-0">
+                                {team.logo ? (
+                                  <img 
+                                    src={team.logo} 
+                                    alt={team.name}
+                                    className="w-12 h-12 rounded-lg object-cover border"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center border">
+                                    <Users className="w-6 h-6 text-primary" />
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Team Details */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-lg truncate">{team.name}</h3>
+                                  {team.clanTag && (
+                                    <Badge variant="outline" className="text-xs">
+                                      [{team.clanTag}]
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                {/* Team Nationality */}
+                                {team.nationality && (
+                                  <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                                    <Flag className="w-3 h-3" />
+                                    <span>{team.nationality}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Captain Info */}
+                                {captain && (
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Crown className="w-4 h-4 text-yellow-500" />
+                                    <span className="font-medium">Captain:</span>
+                                    <span className="text-muted-foreground">
+                                      {captain.name} ({captain.username})
+                                    </span>
+                                    {captain.tag && (
+                                      <Badge variant="secondary" className="text-xs font-mono">
+                                        {captain.tag}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Player Count */}
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Users className="w-3 h-3" />
+                                  <span>{team.players.length} player{team.players.length !== 1 ? 's' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Action Button */}
+                            <div className="flex-shrink-0 ml-4">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewTeamDetails(team.id)}
+                                disabled={loadingTeamDetails}
+                                className="gap-2"
+                              >
+                                {loadingTeamDetails && selectedTeam?.id === team.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <FileText className="w-4 h-4" />
+                                    View Details
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
@@ -917,8 +1062,11 @@ export default function TournamentPage() {
                 </Button>
               )}
               
-              <Button variant="outline" className="w-full">
-                Tournament Rules
+              <Button variant="outline" className="w-full" asChild>
+                <Link href={`/tournaments/${tournament.id}/rules`}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Tournament Rules
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -979,6 +1127,137 @@ export default function TournamentPage() {
           </Card>
         </div>
       </div>
+
+      {/* Team Details Modal */}
+      <Dialog open={isTeamDetailsOpen} onOpenChange={setIsTeamDetailsOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Team Details
+            </DialogTitle>
+            <DialogDescription>
+              Complete team profile and player information
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTeam ? (
+            <div className="space-y-6">
+              {/* Team Information */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  {selectedTeam.logo ? (
+                    <img 
+                      src={selectedTeam.logo} 
+                      alt={selectedTeam.name}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <Users className="w-8 h-8 text-primary" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-xl font-semibold">{selectedTeam.name}</h3>
+                    {selectedTeam.clanTag && (
+                      <Badge variant="outline" className="mt-1">
+                        [{selectedTeam.clanTag}]
+                      </Badge>
+                    )}
+                    {selectedTeam.nationality && (
+                      <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
+                        <Flag className="w-4 h-4" />
+                        {selectedTeam.nationality}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {selectedTeam.user && (
+                  <div className="text-sm text-muted-foreground">
+                    Registered by: {selectedTeam.user.name || selectedTeam.user.username}
+                  </div>
+                )}
+                
+                <div className="text-sm text-muted-foreground">
+                  Registered on: {new Date(selectedTeam.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              </div>
+              
+              {/* Players Section */}
+              <div>
+                <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Players ({selectedTeam.players.length})
+                </h4>
+                
+                <div className="grid gap-4">
+                  {selectedTeam.players.map((player, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="font-medium">Player {index + 1}</h5>
+                        {index === 0 && (
+                          <Badge variant="default" className="text-xs">
+                            Captain
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Name</Label>
+                          <p className="font-medium">{player.name}</p>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Username</Label>
+                          <p className="font-medium">{player.username}</p>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Player Tag</Label>
+                          <p className="font-medium font-mono">{player.tag}</p>
+                        </div>
+                        
+                        {player.nationality && (
+                          <div>
+                            <Label className="text-sm font-medium text-muted-foreground">Nationality</Label>
+                            <div className="flex items-center gap-1">
+                              <Flag className="w-4 h-4" />
+                              <span>{player.nationality}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsTeamDetailsOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+              <p>Loading team details...</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

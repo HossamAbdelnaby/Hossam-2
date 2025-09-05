@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, AlertCircle, Wifi, WifiOff, Shuffle, Settings } from "lucide-react";
 import { BracketMatch, BracketData } from "@/lib/bracket-data";
-import { SingleEliminationBracket } from "./single-elimination-bracket";
+import { SingleEliminationBracket } from "../tournament/brackets/single-elimination-bracket";
 import { DoubleEliminationBracketDisplay } from "./double-elimination-bracket";
 import { SwissBracketDisplay } from "./swiss-bracket";
 import { GroupStageBracketDisplay } from "./group-stage-bracket";

@@ -21,13 +21,10 @@ export async function GET(
           },
         },
         teams: {
-          select: {
-            id: true,
-            name: true,
-            logo: true,
-            _count: {
-              select: {
-                players: true,
+          include: {
+            players: {
+              orderBy: {
+                createdAt: 'asc',
               },
             },
           },

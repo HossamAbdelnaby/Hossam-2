@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar, Trophy, Users, MapPin, Plus, Minus, Crown, CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { CountrySelector } from '@/components/ui/country-selector';
 
 interface Tournament {
   id: string;
@@ -73,7 +74,7 @@ export default function AvailableTournamentsPage() {
     teamName: '',
     clanTag: '',
     teamLogo: '',
-    nationality: '',
+    teamNationality: '',
     players: Array(7).fill(null).map(() => ({
       name: '',
       username: '',
@@ -150,7 +151,7 @@ export default function AvailableTournamentsPage() {
       teamName: '',
       clanTag: '',
       teamLogo: '',
-      nationality: '',
+      teamNationality: '',
       players: Array(7).fill(null).map(() => ({
         name: '',
         username: '',
@@ -222,7 +223,7 @@ export default function AvailableTournamentsPage() {
           name: formData.teamName.trim(),
           clanTag: formData.clanTag.trim() || null,
           logo: formData.teamLogo.trim() || null,
-          nationality: formData.nationality.trim() || null,
+          nationality: formData.teamNationality.trim() || null,
           players: validPlayers,
         }),
       });
@@ -412,27 +413,24 @@ export default function AvailableTournamentsPage() {
                                     </div>
                                   </div>
                                   
-                                  <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <Label htmlFor="nationality">Team Nationality</Label>
-                                      <Input
-                                        id="nationality"
-                                        value={formData.nationality}
-                                        onChange={(e) => handleInputChange('nationality', e.target.value)}
-                                        placeholder="e.g., United States"
-                                      />
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                      <Label htmlFor="teamLogo">Team Logo URL</Label>
-                                      <Input
-                                        id="teamLogo"
-                                        value={formData.teamLogo}
-                                        onChange={(e) => handleInputChange('teamLogo', e.target.value)}
-                                        placeholder="https://example.com/logo.png"
-                                        type="url"
-                                      />
-                                    </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="teamLogo">Team Logo URL</Label>
+                                    <Input
+                                      id="teamLogo"
+                                      value={formData.teamLogo}
+                                      onChange={(e) => handleInputChange('teamLogo', e.target.value)}
+                                      placeholder="https://example.com/logo.png"
+                                      type="url"
+                                    />
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <CountrySelector
+                                      value={formData.teamNationality}
+                                      onValueChange={(value) => handleInputChange('teamNationality', value)}
+                                      label="Team Nationality"
+                                      placeholder="Select team nationality"
+                                    />
                                   </div>
                                 </div>
 
@@ -507,12 +505,12 @@ export default function AvailableTournamentsPage() {
                                         </div>
                                         
                                         <div className="mt-4">
-                                          <Label htmlFor={`player-${index}-nationality`}>Nationality</Label>
-                                          <Input
-                                            id={`player-${index}-nationality`}
-                                            value={player.nationality}
-                                            onChange={(e) => handlePlayerChange(index, 'nationality', e.target.value)}
-                                            placeholder="Player nationality"
+                                          <CountrySelector
+                                            value={player.nationality || ""}
+                                            onValueChange={(value) => handlePlayerChange(index, 'nationality', value)}
+                                            label={`Player ${index + 1} Nationality`}
+                                            placeholder="Select nationality"
+                                            required={index === 0}
                                           />
                                         </div>
                                       </div>
