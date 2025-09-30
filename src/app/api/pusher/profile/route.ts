@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
                 name: true,
               },
             },
+            payment: true, // Include payment relationship
           },
           orderBy: {
             createdAt: 'desc',
@@ -92,44 +93,55 @@ export async function PUT(request: NextRequest) {
       trophies,
       realName,
       profilePicture,
+      description,
+      tagPlayer,
       price,
       paymentMethod,
       negotiation,
       availability,
+      status,
     } = body;
 
     // Validate required fields
-    if (!trophies || trophies < 5000) {
+    if (trophies !== undefined && trophies < 5000) {
       return NextResponse.json(
         { error: 'Minimum 5000 trophies required' },
         { status: 400 }
       );
     }
 
-    if (!realName || !realName.trim()) {
+    if (realName !== undefined && !realName.trim()) {
       return NextResponse.json(
         { error: 'Real name is required' },
         { status: 400 }
       );
     }
 
-    if (!price || price <= 0) {
+    if (price !== undefined && price <= 0) {
       return NextResponse.json(
         { error: 'Valid price is required' },
         { status: 400 }
       );
     }
 
-    if (!paymentMethod) {
+    if (paymentMethod !== undefined && !paymentMethod) {
       return NextResponse.json(
         { error: 'Payment method is required' },
         { status: 400 }
       );
     }
 
-    if (!Object.values(Availability).includes(availability)) {
+    if (availability !== undefined && !Object.values(Availability).includes(availability)) {
       return NextResponse.json(
         { error: 'Invalid availability type' },
+        { status: 400 }
+      );
+    }
+
+    // Validate status if provided
+    if (status !== undefined && !Object.values(PusherStatus).includes(status)) {
+      return NextResponse.json(
+        { error: 'Invalid status' },
         { status: 400 }
       );
     }
@@ -147,17 +159,22 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update pusher profile
+    const updateData: any = {};
+    
+    if (trophies !== undefined) updateData.trophies = trophies;
+    if (realName !== undefined) updateData.realName = realName.trim();
+    if (profilePicture !== undefined) updateData.profilePicture = profilePicture?.trim() || null;
+    if (description !== undefined) updateData.description = description?.trim() || null;
+    if (tagPlayer !== undefined) updateData.tagPlayer = tagPlayer?.trim() || null;
+    if (price !== undefined) updateData.price = price;
+    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
+    if (negotiation !== undefined) updateData.negotiation = negotiation || false;
+    if (availability !== undefined) updateData.availability = availability;
+    if (status !== undefined) updateData.status = status;
+
     const pusher = await db.pusher.update({
       where: { userId: decoded.userId },
-      data: {
-        trophies,
-        realName: realName.trim(),
-        profilePicture: profilePicture?.trim() || null,
-        price,
-        paymentMethod,
-        negotiation: negotiation || false,
-        availability,
-      },
+      data: updateData,
       include: {
         user: {
           select: {

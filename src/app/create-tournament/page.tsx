@@ -22,88 +22,84 @@ import {
   Loader2
 } from "lucide-react";
 
-const tournamentPackages = [
-  {
-    id: "free",
-    name: "Free Package",
-    price: "Free",
-    description: "Perfect for beginners and small tournaments",
-    features: [
-      "1 tournament per week",
-      "Basic bracket types (Single/Double Elimination, Swiss)",
-      "Team registration management",
-      "Basic tournament hosting"
-    ],
-    icon: Trophy,
-    popular: false,
-    color: "bg-blue-500"
-  },
-  {
-    id: "graphics",
-    name: "Graphics Package",
-    price: "$29",
-    description: "Professional tournaments with custom graphics",
-    features: [
-      "All Free features",
-      "Logo creation",
-      "Professional graphic design",
-      "Multiple bracket types (Group Stage, Leaderboard)",
-      "Custom graphic requests",
-      "Priority support"
-    ],
-    icon: Image,
-    popular: true,
-    color: "bg-purple-500"
-  },
-  {
-    id: "discord",
-    name: "Discord Package",
-    price: "$49",
-    description: "Complete solution with Discord integration",
-    features: [
-      "All Graphics features",
-      "Discord server setup help",
-      "Custom chat bot",
-      "Automated tournament management",
-      "Real-time notifications",
-      "Discord integration"
-    ],
-    icon: Bot,
-    popular: false,
-    color: "bg-green-500"
-  },
-  {
-    id: "full",
-    name: "Full Management",
-    price: "$99",
-    description: "Premium experience with complete management",
-    features: [
-      "All Discord features",
-      "Admin-player chat system",
-      "Social media management",
-      "Professional advertising",
-      "Video editing services",
-      "24/7 dedicated support",
-      "Tournament promotion"
-    ],
-    icon: Crown,
-    popular: false,
-    color: "bg-orange-500"
+interface TournamentPackage {
+  id: string;
+  packageType: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  features: string; // JSON string
+  color: string;
+  isActive: boolean;
+  isEditable: boolean;
+}
+
+const getPackageIcon = (packageType: string) => {
+  switch (packageType) {
+    case 'FREE': return Trophy;
+    case 'PAID_GRAPHICS': return Image;
+    case 'PAID_DISCORD_BOT': return Bot;
+    case 'FULL_MANAGEMENT': return Crown;
+    default: return Trophy;
   }
-];
+};
+
+const getPackageId = (packageType: string) => {
+  switch (packageType) {
+    case 'FREE': return 'free';
+    case 'PAID_GRAPHICS': return 'graphics';
+    case 'PAID_DISCORD_BOT': return 'discord';
+    case 'FULL_MANAGEMENT': return 'full';
+    default: return packageType.toLowerCase();
+  }
+};
+
+const parseFeatures = (featuresJson: string): string[] => {
+  try {
+    return JSON.parse(featuresJson || '[]');
+  } catch (error) {
+    console.error('Error parsing features JSON:', error);
+    return [];
+  }
+};
 
 export default function CreateTournamentPage() {
+  const [packages, setPackages] = useState<TournamentPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     const packageParam = searchParams.get('package');
-    if (packageParam && tournamentPackages.find(pkg => pkg.id === packageParam)) {
+    if (packageParam && packages.find(pkg => getPackageId(pkg.packageType) === packageParam)) {
       setSelectedPackage(packageParam);
     }
-  }, [searchParams]);
+  }, [searchParams, packages]);
+
+  const fetchPackages = async () => {
+    try {
+      const response = await fetch('/api/admin/packages');
+      if (response.ok) {
+        const data = await response.json();
+        // Filter active packages and sort by price
+        const activePackages = data.packages
+          .filter((pkg: TournamentPackage) => pkg.isActive)
+          .sort((a: TournamentPackage, b: TournamentPackage) => a.price - b.price);
+        setPackages(activePackages);
+      }
+    } catch (error) {
+      console.error('Error fetching packages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePackageSelect = (packageId: string) => {
     setSelectedPackage(packageId);
@@ -115,7 +111,7 @@ export default function CreateTournamentPage() {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin" />
@@ -160,41 +156,53 @@ export default function CreateTournamentPage() {
 
       {/* Package Selection */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {tournamentPackages.map((pkg) => {
-          const Icon = pkg.icon;
-          const isSelected = selectedPackage === pkg.id;
+        {packages.map((pkg) => {
+          const Icon = getPackageIcon(pkg.packageType);
+          const packageId = getPackageId(pkg.packageType);
+          const isSelected = selectedPackage === packageId;
+          const isPopular = pkg.packageType === 'PAID_GRAPHICS'; // Most popular package
           
           return (
             <Card 
               key={pkg.id} 
               className={`cursor-pointer transition-all hover:shadow-lg ${
                 isSelected ? 'ring-2 ring-primary shadow-lg' : ''
-              } ${pkg.popular ? 'relative' : ''}`}
-              onClick={() => handlePackageSelect(pkg.id)}
+              } ${isPopular ? 'relative' : ''}`}
+              onClick={() => handlePackageSelect(packageId)}
             >
-              {pkg.popular && (
+              {isPopular && (
                 <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-10">
                   Most Popular
                 </Badge>
               )}
               
               <CardHeader className="text-center pb-4">
-                <div className={`w-16 h-16 ${pkg.color} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                <div 
+                  className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                  style={{ backgroundColor: pkg.color }}
+                >
                   <Icon className="w-8 h-8 text-white" />
                 </div>
-                <CardTitle className="text-xl">{pkg.name}</CardTitle>
-                <div className="text-3xl font-bold text-primary">{pkg.price}</div>
+                <CardTitle className="text-xl">{pkg.name || pkg.packageType.replace(/_/g, ' ')}</CardTitle>
+                <div className="text-3xl font-bold text-primary">
+                  {pkg.price === 0 ? 'Free' : `${pkg.currency}${pkg.price.toLocaleString()}`}
+                </div>
                 <CardDescription>{pkg.description}</CardDescription>
               </CardHeader>
               
               <CardContent className="pt-0">
                 <ul className="space-y-2 mb-6">
-                  {pkg.features.map((feature, index) => (
+                  {parseFeatures(pkg.features).slice(0, 4).map((feature, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
                       <Star className="w-4 h-4 text-primary fill-current mt-0.5 flex-shrink-0" />
                       <span>{feature}</span>
                     </li>
                   ))}
+                  {parseFeatures(pkg.features).length > 4 && (
+                    <li className="text-xs text-muted-foreground pl-6">
+                      +{parseFeatures(pkg.features).length - 4} more features
+                    </li>
+                  )}
                 </ul>
                 
                 <div className="text-center">
@@ -220,7 +228,7 @@ export default function CreateTournamentPage() {
         >
           {selectedPackage ? (
             <>
-              Continue with {tournamentPackages.find(pkg => pkg.id === selectedPackage)?.name}
+              Continue with {packages.find(pkg => getPackageId(pkg.packageType) === selectedPackage)?.name || 'Selected Package'}
               <Zap className="w-5 h-5" />
             </>
           ) : (
@@ -236,90 +244,102 @@ export default function CreateTournamentPage() {
       </div>
 
       {/* Package Comparison */}
-      <div className="mt-16 bg-muted/50 rounded-lg p-8">
-        <h2 className="text-2xl font-bold mb-6 text-center">Package Comparison</h2>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left p-4">Features</th>
-                {tournamentPackages.map(pkg => (
-                  <th key={pkg.id} className="text-center p-4">
-                    {pkg.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Tournaments per week</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    {pkg.id === 'free' ? '1' : 'Unlimited'}
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Basic bracket types</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    <Star className="w-4 h-4 text-primary fill-current mx-auto" />
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Advanced bracket types</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    {pkg.id !== 'free' ? (
+      {packages.length > 0 && (
+        <div className="mt-16 bg-muted/50 rounded-lg p-8">
+          <h2 className="text-2xl font-bold mb-6 text-center">Package Comparison</h2>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-4">Features</th>
+                  {packages.map(pkg => (
+                    <th key={pkg.id} className="text-center p-4">
+                      {pkg.name || pkg.packageType.replace(/_/g, ' ')}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Price</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      <span className="font-bold">
+                        {pkg.price === 0 ? 'Free' : `${pkg.currency}${pkg.price.toLocaleString()}`}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Tournaments per week</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      {pkg.packageType === 'FREE' ? '1' : 'Unlimited'}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Basic bracket types</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
                       <Star className="w-4 h-4 text-primary fill-current mx-auto" />
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Graphic design</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    {pkg.id === 'graphics' || pkg.id === 'discord' || pkg.id === 'full' ? (
-                      <Star className="w-4 h-4 text-primary fill-current mx-auto" />
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Discord integration</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    {pkg.id === 'discord' || pkg.id === 'full' ? (
-                      <Star className="w-4 h-4 text-primary fill-current mx-auto" />
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b">
-                <td className="p-4 font-medium">Full management</td>
-                {tournamentPackages.map(pkg => (
-                  <td key={pkg.id} className="text-center p-4">
-                    {pkg.id === 'full' ? (
-                      <Star className="w-4 h-4 text-primary fill-current mx-auto" />
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Advanced bracket types</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      {pkg.packageType !== 'FREE' ? (
+                        <Star className="w-4 h-4 text-primary fill-current mx-auto" />
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Graphic design</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      {pkg.packageType === 'PAID_GRAPHICS' || pkg.packageType === 'PAID_DISCORD_BOT' || pkg.packageType === 'FULL_MANAGEMENT' ? (
+                        <Star className="w-4 h-4 text-primary fill-current mx-auto" />
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Discord integration</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      {pkg.packageType === 'PAID_DISCORD_BOT' || pkg.packageType === 'FULL_MANAGEMENT' ? (
+                        <Star className="w-4 h-4 text-primary fill-current mx-auto" />
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-4 font-medium">Full management</td>
+                  {packages.map(pkg => (
+                    <td key={pkg.id} className="text-center p-4">
+                      {pkg.packageType === 'FULL_MANAGEMENT' ? (
+                        <Star className="w-4 h-4 text-primary fill-current mx-auto" />
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

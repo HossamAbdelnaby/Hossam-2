@@ -25,7 +25,10 @@ import {
   Loader2,
   Save,
   CreditCard,
-  Dices
+  Dices,
+  AlertTriangle,
+  Upload,
+  X
 } from "lucide-react";
 
 const bracketTypes = [
@@ -98,6 +101,7 @@ export default function TournamentFormPage() {
     tournamentName: "",
     url: "",
     description: "",
+    tournamentLogo: "", // New field for tournament logo
     
     // Schedule & Status
     registrationStart: "",
@@ -107,6 +111,12 @@ export default function TournamentFormPage() {
     
     // Game Info
     prizeAmount: "",
+    currency: "USD",
+    paymentMethods: [],
+    earlyBirdPrice: "",
+    regularPrice: "",
+    latePrice: "",
+    paymentTerms: "",
     bracketType: "", // Single bracket type for free package
     bracketTypes: [], // Multiple bracket types for paid packages
     maxTeams: 16, // Default to 16 teams
@@ -136,6 +146,64 @@ export default function TournamentFormPage() {
     setFormData(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      setError('Image size must be less than 5MB');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      // Create FormData for file upload
+      const uploadData = new FormData();
+      uploadData.append('image', file);
+
+      // Upload image
+      const response = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: uploadData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload image');
+      }
+
+      const data = await response.json();
+      
+      // Update form with uploaded image URL
+      setFormData(prev => ({
+        ...prev,
+        tournamentLogo: data.url
+      }));
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload logo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogoRemove = () => {
+    setFormData(prev => ({
+      ...prev,
+      tournamentLogo: ""
     }));
   };
 
@@ -186,39 +254,65 @@ export default function TournamentFormPage() {
     setLoading(true);
 
     try {
-      // First, create the tournament for all packages
-      const response = await fetch('/api/tournaments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          packageType: mapPackageToDatabase(packageType),
-          prizeAmount: parseFloat(formData.prizeAmount) || 0,
-          registrationStart: new Date(formData.registrationStart),
-          registrationEnd: formData.registrationEnd ? new Date(formData.registrationEnd) : null,
-          tournamentStart: new Date(formData.tournamentStart),
-          tournamentEnd: formData.tournamentEnd ? new Date(formData.tournamentEnd) : null,
-          bracketType: packageType === 'free' ? formData.bracketType : (formData.bracketTypes[0] || formData.bracketType),
-          bracketTypes: packageType === 'free' ? [formData.bracketType] : formData.bracketTypes,
-          maxTeams: parseInt(formData.maxTeams.toString()),
-          status: 'DRAFT', // Always start as DRAFT, status will be managed automatically
-        }),
-      });
+        if (features.requiresPayment) {
+        // For paid packages: save data first, then redirect to payment
+        const response = await fetch('/api/tournaments/pending', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            packageType: mapPackageToDatabase(packageType),
+            prizeAmount: parseFloat(formData.prizeAmount) || 0,
+            registrationStart: new Date(formData.registrationStart),
+            registrationEnd: formData.registrationEnd ? new Date(formData.registrationEnd) : null,
+            tournamentStart: new Date(formData.tournamentStart),
+            tournamentEnd: formData.tournamentEnd ? new Date(formData.tournamentEnd) : null,
+            bracketType: packageType === 'free' ? formData.bracketType : (formData.bracketTypes[0] || formData.bracketType),
+            bracketTypes: packageType === 'free' ? [formData.bracketType] : formData.bracketTypes,
+            maxTeams: parseInt(formData.maxTeams.toString()),
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create tournament');
-      }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to save tournament data');
+        }
 
-      const data = await response.json();
-      
-      // If payment is required, redirect to payment page
-      if (features.requiresPayment) {
-        // Redirect to payment page with tournament ID
-        router.push(`/payment?tournamentId=${data.tournament.id}&package=${packageType}`);
+        const data = await response.json();
+        
+        // Redirect to payment page with pending tournament ID
+        router.push(`/payment?pendingTournamentId=${data.pendingTournament.id}&package=${packageType}`);
       } else {
+        // For free packages: create tournament directly
+        const response = await fetch('/api/tournaments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            packageType: mapPackageToDatabase(packageType),
+            prizeAmount: parseFloat(formData.prizeAmount) || 0,
+            registrationStart: new Date(formData.registrationStart),
+            registrationEnd: formData.registrationEnd ? new Date(formData.registrationEnd) : null,
+            tournamentStart: new Date(formData.tournamentStart),
+            tournamentEnd: formData.tournamentEnd ? new Date(formData.tournamentEnd) : null,
+            bracketType: packageType === 'free' ? formData.bracketType : (formData.bracketTypes[0] || formData.bracketType),
+            bracketTypes: packageType === 'free' ? [formData.bracketType] : formData.bracketTypes,
+            maxTeams: parseInt(formData.maxTeams.toString()),
+            paymentCompleted: true, // Free packages don't require payment
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create tournament');
+        }
+
+        const data = await response.json();
+        
         // For free packages, just show success
         setSuccess(true);
         setTimeout(() => {
@@ -312,6 +406,24 @@ export default function TournamentFormPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to Packages
         </Link>
+        
+        <div className="mb-4">
+          <Alert className="border-blue-200 bg-blue-50">
+            <AlertTriangle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              {features.requiresPayment ? (
+                <span>
+                  <strong>Security Notice:</strong> This is a paid package. Your tournament will only be created 
+                  after successful payment completion. No tournament will be created until payment is verified.
+                </span>
+              ) : (
+                <span>
+                  <strong>Free Package:</strong> Your tournament will be created immediately upon submission.
+                </span>
+              )}
+            </AlertDescription>
+          </Alert>
+        </div>
         
         <div className="flex items-center gap-4 mb-4">
           <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
@@ -409,6 +521,84 @@ export default function TournamentFormPage() {
                 rows={3}
                 required
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="tournamentLogo" className="flex items-center gap-2">
+                <Trophy className="w-4 h-4" />
+                Tournament Logo
+              </Label>
+              <div className="flex items-center gap-4">
+                {formData.tournamentLogo ? (
+                  <div className="relative group">
+                    <img
+                      src={formData.tournamentLogo}
+                      alt="Tournament Logo"
+                      className="w-20 h-20 object-cover rounded-lg border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="w-6 h-6 p-0"
+                        onClick={handleLogoRemove}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 border-2 border-dashed border-muted-foreground/25 rounded-lg flex items-center justify-center bg-muted/5 hover:bg-muted/10 transition-colors">
+                    <Trophy className="w-8 h-8 text-muted-foreground/50" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                      disabled={loading}
+                      className="hover:bg-primary hover:text-primary-foreground transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {formData.tournamentLogo ? 'Change Logo' : 'Upload Logo'}
+                    </Button>
+                    {formData.tournamentLogo && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleLogoRemove}
+                        className="hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleLogoUpload(file);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    JPEG, PNG, GIF, or WebP (max 5MB)
+                  </p>
+                  {formData.tournamentLogo && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ Logo uploaded successfully
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -617,6 +807,122 @@ export default function TournamentFormPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Payment Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Payment Information
+            </CardTitle>
+            <CardDescription>
+              Configure payment settings for your tournament
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="currency">Currency *</Label>
+                <Select value={formData.currency || 'USD'} onValueChange={(value) => handleInputChange('currency', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR - Euro</SelectItem>
+                    <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethods">Accepted Payment Methods *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {paymentMethods.map((method) => (
+                    <label key={method.value} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.paymentMethods?.includes(method.value) || false}
+                        onChange={(e) => {
+                          const currentMethods = formData.paymentMethods || [];
+                          if (e.target.checked) {
+                            handleInputChange('paymentMethods', [...currentMethods, method.value]);
+                          } else {
+                            handleInputChange('paymentMethods', currentMethods.filter((m: string) => m !== method.value));
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{method.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="earlyBirdPrice">Early Bird Price</Label>
+                <Input
+                  id="earlyBirdPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.earlyBirdPrice || ''}
+                  onChange={(e) => handleInputChange('earlyBirdPrice', e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="regularPrice">Regular Price *</Label>
+                <Input
+                  id="regularPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.regularPrice || ''}
+                  onChange={(e) => handleInputChange('regularPrice', e.target.value)}
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="latePrice">Late Price</Label>
+                <Input
+                  id="latePrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.latePrice || ''}
+                  onChange={(e) => handleInputChange('latePrice', e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="paymentTerms">Payment Terms & Conditions</Label>
+              <Textarea
+                id="paymentTerms"
+                value={formData.paymentTerms || ''}
+                onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
+                placeholder="Specify payment terms, refund policy, etc."
+                rows={3}
+              />
+            </div>
+            
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Payment processing fees may apply depending on the selected payment methods. 
+                Participants will be redirected to the payment page after registration.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
 
         {/* Payment Section - Hidden for all packages, will be handled after tournament creation */}
         {/* Payment section is removed to work like free package */}

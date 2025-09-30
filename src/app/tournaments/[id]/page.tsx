@@ -247,7 +247,7 @@ export default function TournamentPage() {
 
   const handleRegisterClick = () => {
     if (!user) {
-      window.location.href = '/login';
+      router.push('/login');
       return;
     }
     
@@ -406,7 +406,7 @@ export default function TournamentPage() {
 
   const handleCopyUrl = async () => {
     try {
-      const url = window.location.origin + `/tournaments/${tournamentId}`;
+      const url = `${window.location.origin}/tournaments/${tournamentId}`;
       await navigator.clipboard.writeText(url);
       toast({
         title: "URL Copied!",

@@ -71,19 +71,19 @@ export const notifications = {
       type: 'CONTRACT_STATUS'
     }),
 
-  contractAccepted: async (userId: string, clanTag: string) =>
+  contractAccepted: async (userId: string, pusherName: string) =>
     sendNotification({
       userId,
       title: 'Contract Accepted',
-      message: `Your contract with clan ${clanTag} has been accepted.`,
+      message: `${pusherName} has accepted your contract offer! Please proceed with payment.`,
       type: 'CONTRACT_STATUS'
     }),
 
-  contractRejected: async (userId: string, clanTag: string) =>
+  contractRejected: async (userId: string, pusherName: string) =>
     sendNotification({
       userId,
       title: 'Contract Rejected',
-      message: `Your contract offer to clan ${clanTag} has been rejected.`,
+      message: `${pusherName} has rejected your contract offer.`,
       type: 'CONTRACT_STATUS'
     }),
 
@@ -93,6 +93,22 @@ export const notifications = {
       title: 'Contract Completed',
       message: `Your contract with clan ${clanTag} has been completed successfully.`,
       type: 'CONTRACT_STATUS'
+    }),
+
+  contractPaymentCreated: async (userId: string, clientName: string, amount: number) =>
+    sendNotification({
+      userId,
+      title: 'Payment Request Created',
+      message: `A payment request of $${amount} has been created for your contract with ${clientName}.`,
+      type: 'PAYMENT_STATUS'
+    }),
+
+  contractPaymentCompleted: async (userId: string, pusherName: string, amount: number) =>
+    sendNotification({
+      userId,
+      title: 'Payment Completed',
+      message: `Payment of $${amount} for ${pusherName} has been completed successfully.`,
+      type: 'PAYMENT_STATUS'
     }),
 
   // Service order notifications

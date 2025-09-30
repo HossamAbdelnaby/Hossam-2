@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Users, CheckCircle, ArrowRight } from "lucide-react";
+import { Trophy, Users, CheckCircle, ArrowRight, TrendingDown } from "lucide-react";
 import { BracketMatch } from "@/lib/bracket-data";
 
 interface MatchManagementModalProps {
@@ -32,10 +32,13 @@ export function MatchManagementModal({
   const [isUpdating, setIsUpdating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [advancementInfo, setAdvancementInfo] = useState<{winnerName: string, nextRound: number} | null>(null);
+  const [losersBracketUpdate, setLosersBracketUpdate] = useState<{losingTeamName: string, losersRound: number} | null>(null);
 
   const handleUpdateResult = async () => {
     try {
       setIsUpdating(true);
+      
+      // Update the match result - the API will handle losers bracket automatically
       const response = await fetch(
         `/api/tournaments/${tournamentId}/matches/${match.id}/result`,
         {
@@ -62,13 +65,26 @@ export function MatchManagementModal({
           setAdvancementInfo(data.advancementInfo);
         }
         
+        // Check if it's double elimination and show losers bracket info
+        if (data.isDoubleElimination) {
+          // Get the losing team info
+          const losingTeam = match.team1?.id === winnerId ? match.team2 : match.team1;
+          if (losingTeam && match.round <= 3) { // Winners bracket rounds
+            setLosersBracketUpdate({
+              losingTeamName: losingTeam.name,
+              losersRound: match.round + 3, // Losers rounds start from round 4
+            });
+          }
+        }
+        
         // Auto-close after delay
         setTimeout(() => {
           onUpdate();
           onClose();
           setShowSuccess(false);
           setAdvancementInfo(null);
-        }, 2000);
+          setLosersBracketUpdate(null);
+        }, 3000);
       } else {
         console.error("Failed to update match result");
       }
@@ -202,6 +218,17 @@ export function MatchManagementModal({
                           <ArrowRight className="w-4 h-4" />
                           <span className="font-medium">
                             {advancementInfo.winnerName} advances to Round {advancementInfo.nextRound}!
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {losersBracketUpdate && (
+                      <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                        <div className="flex items-center gap-2 text-orange-700">
+                          <TrendingDown className="w-4 h-4" />
+                          <span className="font-medium">
+                            {losersBracketUpdate.losingTeamName} moves to Losers Bracket Round {losersBracketUpdate.losersRound}!
                           </span>
                         </div>
                       </div>

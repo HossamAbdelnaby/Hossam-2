@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AvatarUpload } from "@/components/ui/avatar-upload";
 import { useAuth } from "@/contexts/auth-context";
 import { 
   ArrowLeft, 
@@ -28,7 +29,8 @@ import {
   Loader2,
   Save,
   Star,
-  Shield
+  Shield,
+  Trash2
 } from "lucide-react";
 
 interface PusherProfile {
@@ -36,6 +38,8 @@ interface PusherProfile {
   trophies: number;
   realName: string;
   profilePicture?: string;
+  description?: string;
+  tagPlayer?: string;
   price: number;
   paymentMethod: string;
   negotiation: boolean;
@@ -69,11 +73,15 @@ export default function PusherRegistrationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     trophies: "",
     realName: "",
     profilePicture: "",
+    description: "",
+    tagPlayer: "",
     price: "",
     paymentMethod: "",
     negotiation: false,
@@ -100,6 +108,8 @@ export default function PusherRegistrationPage() {
           trophies: data.pusher.trophies.toString(),
           realName: data.pusher.realName,
           profilePicture: data.pusher.profilePicture || "",
+          description: data.pusher.description || "",
+          tagPlayer: data.pusher.tagPlayer || "",
           price: data.pusher.price.toString(),
           paymentMethod: data.pusher.paymentMethod,
           negotiation: data.pusher.negotiation,
@@ -118,6 +128,29 @@ export default function PusherRegistrationPage() {
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleDeleteProfile = async () => {
+    try {
+      setDeleteLoading(true);
+      
+      const response = await fetch('/api/pusher/profile', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete profile');
+      }
+
+      // Redirect to home page after successful deletion
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete profile');
+      setDeleteConfirm(false);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,6 +190,8 @@ export default function PusherRegistrationPage() {
           trophies,
           realName: formData.realName.trim(),
           profilePicture: formData.profilePicture.trim() || null,
+          description: formData.description.trim() || null,
+          tagPlayer: formData.tagPlayer.trim() || null,
           price,
           paymentMethod: formData.paymentMethod,
           negotiation: formData.negotiation,
@@ -292,7 +327,16 @@ export default function PusherRegistrationPage() {
               Tell us about yourself and your Clash of Clans experience
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Profile Picture Upload */}
+            <div className="space-y-4">
+              <Label>Profile Picture</Label>
+              <AvatarUpload 
+                currentAvatar={formData.profilePicture}
+                onAvatarChange={(url) => handleInputChange('profilePicture', url)}
+              />
+            </div>
+            
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="realName">Real Name *</Label>
@@ -322,15 +366,46 @@ export default function PusherRegistrationPage() {
               </div>
             </div>
             
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tagPlayer">Player Tag</Label>
+                <Input
+                  id="tagPlayer"
+                  value={formData.tagPlayer}
+                  onChange={(e) => handleInputChange('tagPlayer', e.target.value)}
+                  placeholder="#ABC123XYZ"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your Clash of Clans player tag (starts with #)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="profilePicture">Profile Picture URL (Optional)</Label>
+                <Input
+                  id="profilePicture"
+                  value={formData.profilePicture}
+                  onChange={(e) => handleInputChange('profilePicture', e.target.value)}
+                  placeholder="https://example.com/profile.jpg"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Or use the upload button above
+                </p>
+              </div>
+            </div>
+            
             <div className="space-y-2">
-              <Label htmlFor="profilePicture">Profile Picture URL</Label>
-              <Input
-                id="profilePicture"
-                value={formData.profilePicture}
-                onChange={(e) => handleInputChange('profilePicture', e.target.value)}
-                placeholder="https://example.com/profile.jpg"
-                type="url"
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                placeholder="Tell us about your experience, play style, achievements, and what makes you a great pusher..."
+                rows={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Share your experience, play style, and what makes you a great pusher
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -472,23 +547,78 @@ export default function PusherRegistrationPage() {
         </Card>
 
         {/* Submit Button */}
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" asChild>
-            <Link href="/">Cancel</Link>
-          </Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {existingProfile ? 'Updating...' : 'Creating...'}
-              </>
+        <div className="flex justify-between items-end gap-4">
+          {/* Delete Profile Button - Only show for existing profiles */}
+          {existingProfile && (
+            !deleteConfirm ? (
+              <Button 
+                variant="destructive" 
+                type="button"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Profile
+              </Button>
             ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                {existingProfile ? 'Update Profile' : 'Create Profile'}
-              </>
-            )}
-          </Button>
+              <div className="space-y-2">
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm font-medium text-destructive mb-1">
+                    ⚠️ Delete Profile Permanently?
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    This action cannot be undone. All your profile data will be permanently deleted.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={handleDeleteProfile}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Confirm Delete
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setDeleteConfirm(false)}
+                    disabled={deleteLoading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )
+          )}
+
+          <div className="flex gap-4 ml-auto">
+            <Button type="button" variant="outline" asChild>
+              <Link href="/">Cancel</Link>
+            </Button>
+            <Button type="submit" disabled={submitting || deleteLoading}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {existingProfile ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {existingProfile ? 'Update Profile' : 'Create Profile'}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

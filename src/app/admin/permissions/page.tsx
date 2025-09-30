@@ -29,7 +29,8 @@ import {
   Database,
   Zap,
   Globe,
-  Eye
+  Eye,
+  Trophy
 } from "lucide-react";
 
 interface UserPermission {

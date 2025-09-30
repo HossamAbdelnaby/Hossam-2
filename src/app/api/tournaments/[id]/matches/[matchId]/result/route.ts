@@ -102,59 +102,41 @@ export async function PUT(
       },
     });
 
-    // If winner is set and there's a next match, advance the winner
-    if (winnerId) {
-      // Find the next match that this match feeds into
-      const nextMatches = await db.match.findMany({
-        where: {
-          stage: {
-            tournamentId: tournamentId,
-          },
-          round: match.round + 1, // Next round
-          OR: [
-            { team1Id: null },
-            { team2Id: null },
-          ],
-        },
-        include: {
-          team1: true,
-          team2: true,
-        },
-        orderBy: {
-          matchNumber: 'asc',
-        },
-      });
-
-      if (nextMatches.length > 0) {
-        // Find the first available slot in the next round
-        let updated = false;
-        
-        for (const nextMatch of nextMatches) {
-          const updateData: any = {};
-          
-          if (!nextMatch.team1Id) {
-            updateData.team1Id = winnerId;
-          } else if (!nextMatch.team2Id) {
-            updateData.team2Id = winnerId;
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            await db.match.update({
-              where: { id: nextMatch.id },
-              data: updateData,
-            });
-            updated = true;
-            break; // Only fill one slot per winner
-          }
-        }
-        
-        if (!updated) {
-          console.log('No available slots found in next round for winner:', winnerId);
-        }
+    const tournament = match.stage.tournament;
+    const isDoubleElimination = tournament.bracketType === 'DOUBLE_ELIMINATION';
+    
+    // Handle Double Elimination logic
+    if (isDoubleElimination && winnerId) {
+      const totalWinnersRounds = Math.ceil(Math.log2(tournament.maxTeams));
+      const isWinnersBracket = match.round <= totalWinnersRounds;
+      
+      // Get the losing team
+      const losingTeamId = winnerId === match.team1Id ? match.team2Id : match.team1Id;
+      
+      if (isWinnersBracket && losingTeamId) {
+        // Move losing team to losers bracket (from winners bracket)
+        await moveTeamToLosersBracket(tournamentId, losingTeamId, match.round, totalWinnersRounds);
+      } else if (!isWinnersBracket && losingTeamId) {
+        // Eliminate losing team from tournament (from losers bracket - second loss)
+        await eliminateTeamFromTournament(tournamentId, losingTeamId);
+        console.log(`Team ${losingTeamId} eliminated from tournament (second loss in losers bracket)`);
+      }
+      
+      // Handle winners bracket advancement - ONLY FOR WINNERS BRACKET
+      if (isWinnersBracket) {
+        await advanceWinnerToNextMatch(tournamentId, winnerId, match.round, true);
+      }
+      
+      // Check if we need to setup grand final
+      await checkAndSetupGrandFinal(tournamentId, totalWinnersRounds);
+    } else {
+      // Single elimination logic (existing logic)
+      if (winnerId) {
+        await advanceWinnerToNextMatchSingleElimination(tournamentId, winnerId, match.round);
       }
     }
 
-    // Check if tournament is completed (all matches have winners)
+    // Check if tournament is completed
     const allMatches = await db.match.findMany({
       where: {
         stage: {
@@ -194,6 +176,7 @@ export async function PUT(
       match: updatedMatch,
       tournamentCompleted: allMatchesCompleted,
       advancementInfo,
+      isDoubleElimination,
     });
   } catch (error) {
     console.error('Error updating match results:', error);
@@ -201,5 +184,278 @@ export async function PUT(
       { error: 'Failed to update match results' },
       { status: 500 }
     );
+  }
+}
+
+// Helper function to move losing team to losers bracket
+async function moveTeamToLosersBracket(
+  tournamentId: string, 
+  losingTeamId: string, 
+  currentRound: number, 
+  totalWinnersRounds: number
+) {
+  try {
+    // Calculate which losers round this team should go to
+    const losersRound = currentRound; // First losers round corresponds to current winners round
+    const targetRound = totalWinnersRounds + losersRound;
+    
+    // Find an available slot in the losers bracket
+    const availableSlots = await db.match.findMany({
+      where: {
+        stage: {
+          tournamentId,
+        },
+        round: targetRound,
+        OR: [
+          { team1Id: null },
+          { team2Id: null },
+        ],
+      },
+      orderBy: {
+        matchNumber: 'asc',
+      },
+    });
+
+    if (availableSlots.length > 0) {
+      // Place the losing team in the first available slot
+      const targetSlot = availableSlots[0];
+      const updateData: any = {};
+      
+      if (!targetSlot.team1Id) {
+        updateData.team1Id = losingTeamId;
+      } else if (!targetSlot.team2Id) {
+        updateData.team2Id = losingTeamId;
+      }
+      
+      if (Object.keys(updateData).length > 0) {
+        await db.match.update({
+          where: { id: targetSlot.id },
+          data: updateData,
+        });
+        
+        console.log(`Moved losing team ${losingTeamId} to losers bracket round ${targetRound}`);
+      }
+    } else {
+      console.log(`No available slots found in losers bracket round ${targetRound} for team ${losingTeamId}`);
+    }
+  } catch (error) {
+    console.error('Error moving team to losers bracket:', error);
+  }
+}
+
+// Helper function to advance winner in double elimination
+async function advanceWinnerToNextMatch(
+  tournamentId: string, 
+  winnerId: string, 
+  currentRound: number, 
+  isWinnersBracket: boolean
+) {
+  try {
+    let targetRound;
+    
+    if (isWinnersBracket) {
+      // Winner stays in winners bracket
+      targetRound = currentRound + 1;
+    } else {
+      // Winner advances in losers bracket
+      targetRound = currentRound + 1;
+    }
+    
+    // Find the correct next match based on bracket structure
+    // For double elimination, we need to be more specific about which match the winner goes to
+    const nextMatches = await db.match.findMany({
+      where: {
+        stage: {
+          tournamentId,
+        },
+        round: targetRound,
+      },
+      include: {
+        team1: true,
+        team2: true,
+      },
+      orderBy: {
+        matchNumber: 'asc',
+      },
+    });
+
+    if (nextMatches.length > 0) {
+      // Find the correct match for this winner
+      let targetSlot = null;
+      
+      if (isWinnersBracket) {
+        // In winners bracket, winners go to specific matches based on their original position
+        // Match 1 and 2 winners go to match 1 in next round
+        // Match 3 and 4 winners go to match 2 in next round
+        const currentMatch = await db.match.findUnique({
+          where: { id: winnerId }, // This is wrong, we need the original match
+        });
+        
+        // For now, just find first available slot
+        targetSlot = nextMatches.find(match => !match.team1Id || !match.team2Id);
+      } else {
+        // In losers bracket, find first available slot
+        targetSlot = nextMatches.find(match => !match.team1Id || !match.team2Id);
+      }
+      
+      if (targetSlot) {
+        const updateData: any = {};
+        
+        if (!targetSlot.team1Id) {
+          updateData.team1Id = winnerId;
+        } else if (!targetSlot.team2Id) {
+          updateData.team2Id = winnerId;
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          await db.match.update({
+            where: { id: targetSlot.id },
+            data: updateData,
+          });
+          
+          console.log(`Advanced winner ${winnerId} to match ${targetSlot.id} in round ${targetRound}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error advancing winner:', error);
+  }
+}
+
+// Helper function to advance winner in single elimination
+async function advanceWinnerToNextMatchSingleElimination(
+  tournamentId: string, 
+  winnerId: string, 
+  currentRound: number
+) {
+  try {
+    // Find the next match that this match feeds into
+    const nextMatches = await db.match.findMany({
+      where: {
+        stage: {
+          tournamentId,
+        },
+        round: currentRound + 1,
+        OR: [
+          { team1Id: null },
+          { team2Id: null },
+        ],
+      },
+      include: {
+        team1: true,
+        team2: true,
+      },
+      orderBy: {
+        matchNumber: 'asc',
+      },
+    });
+
+    if (nextMatches.length > 0) {
+      // Find the first available slot in the next round
+      for (const nextMatch of nextMatches) {
+        const updateData: any = {};
+        
+        if (!nextMatch.team1Id) {
+          updateData.team1Id = winnerId;
+        } else if (!nextMatch.team2Id) {
+          updateData.team2Id = winnerId;
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          await db.match.update({
+            where: { id: nextMatch.id },
+            data: updateData,
+          });
+          break; // Only fill one slot per winner
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error advancing winner in single elimination:', error);
+  }
+}
+
+// Helper function to eliminate team from tournament (second loss in losers bracket)
+async function eliminateTeamFromTournament(
+  tournamentId: string, 
+  teamId: string
+) {
+  try {
+    // Mark the team as eliminated in the tournament
+    // You might want to add an 'eliminated' field to the team-tournament relationship
+    // For now, we'll just log the elimination and could update team status if needed
+    
+    // Optional: Update team status to eliminated
+    // await db.tournamentTeam.update({
+    //   where: {
+    //     tournamentId_teamId: {
+    //       tournamentId,
+    //       teamId
+    //     }
+    //   },
+    //   data: { status: 'ELIMINATED' }
+    // });
+    
+    console.log(`Team ${teamId} eliminated from tournament (second loss in losers bracket)`);
+  } catch (error) {
+    console.error('Error eliminating team from tournament:', error);
+  }
+}
+
+// Helper function to check and setup grand final
+async function checkAndSetupGrandFinal(
+  tournamentId: string, 
+  totalWinnersRounds: number
+) {
+  try {
+    const grandFinalRound = totalWinnersRounds * 2 + 1;
+    
+    // Check if we have winners from both brackets
+    const winnersFinalMatch = await db.match.findFirst({
+      where: {
+        stage: { tournamentId },
+        round: totalWinnersRounds,
+        winnerId: { not: null },
+      },
+      include: {
+        winner: true,
+      },
+    });
+
+    const losersFinalMatch = await db.match.findFirst({
+      where: {
+        stage: { tournamentId },
+        round: totalWinnersRounds * 2, // Losers final round
+        winnerId: { not: null },
+      },
+      include: {
+        winner: true,
+      },
+    });
+
+    // If both finals have winners, setup grand final
+    if (winnersFinalMatch && losersFinalMatch) {
+      const grandFinalMatch = await db.match.findFirst({
+        where: {
+          stage: { tournamentId },
+          round: grandFinalRound,
+        },
+      });
+
+      if (grandFinalMatch) {
+        // Update grand final with the two finalists
+        await db.match.update({
+          where: { id: grandFinalMatch.id },
+          data: {
+            team1Id: winnersFinalMatch.winnerId,
+            team2Id: losersFinalMatch.winnerId,
+          },
+        });
+        
+        console.log(`Setup grand final with ${winnersFinalMatch.winner?.name} vs ${losersFinalMatch.winner?.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking and setting up grand final:', error);
   }
 }

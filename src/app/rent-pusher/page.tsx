@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,10 +25,12 @@ import {
   Star,
   User,
   Globe,
+  Shield,
   CheckCircle,
   Loader2,
   Send,
-  Plus
+  Plus,
+  Handshake
 } from "lucide-react";
 
 interface Pusher {
@@ -35,6 +38,8 @@ interface Pusher {
   trophies: number;
   realName: string;
   profilePicture?: string;
+  description?: string;
+  tagPlayer?: string;
   price: number;
   paymentMethod: string;
   negotiation: boolean;
@@ -70,7 +75,18 @@ export default function RentPusherPage() {
   const [submittingContract, setSubmittingContract] = useState(false);
   const [contractSuccess, setContractSuccess] = useState(false);
   
+  // Negotiation dialog state
+  const [selectedPusherForNegotiation, setSelectedPusherForNegotiation] = useState<Pusher | null>(null);
+  const [showNegotiationDialog, setShowNegotiationDialog] = useState(false);
+  const [negotiationForm, setNegotiationForm] = useState({
+    message: "",
+    proposedPrice: "",
+  });
+  const [submittingNegotiation, setSubmittingNegotiation] = useState(false);
+  const [negotiationSuccess, setNegotiationSuccess] = useState(false);
+  
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     fetchPushers();
@@ -112,13 +128,13 @@ export default function RentPusherPage() {
   const filteredPushers = pushers.filter(pusher =>
     pusher.realName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     pusher.user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pusher.user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    pusher.user.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleHirePusher = (pusher: Pusher) => {
     if (!user) {
       // Redirect to login if not authenticated
-      window.location.href = '/login';
+      router.push('/login');
       return;
     }
     setSelectedPusher(pusher);
@@ -158,6 +174,51 @@ export default function RentPusherPage() {
       setError(err instanceof Error ? err.message : 'Failed to send contract request');
     } finally {
       setSubmittingContract(false);
+    }
+  };
+
+  const handleNegotiate = (pusher: Pusher) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setSelectedPusherForNegotiation(pusher);
+    setShowNegotiationDialog(true);
+  };
+
+  const handleNegotiationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPusherForNegotiation || !user) return;
+
+    setSubmittingNegotiation(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/pusher/negotiation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pusherId: selectedPusherForNegotiation.id,
+          message: negotiationForm.message,
+          proposedPrice: parseFloat(negotiationForm.proposedPrice),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send negotiation request');
+      }
+
+      setNegotiationSuccess(true);
+      setShowNegotiationDialog(false);
+      setNegotiationForm({ message: "", proposedPrice: "" });
+      setSelectedPusherForNegotiation(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send negotiation request');
+    } finally {
+      setSubmittingNegotiation(false);
     }
   };
 
@@ -280,6 +341,15 @@ export default function RentPusherPage() {
         </Alert>
       )}
 
+      {negotiationSuccess && (
+        <Alert className="mb-6 border-green-200 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Negotiation request sent successfully! The pusher will review your offer.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Loading State */}
       {loading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -308,15 +378,24 @@ export default function RentPusherPage() {
                 <Card key={pusher.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                        <User className="w-6 h-6 text-primary-foreground" />
+                      {/* Profile Picture */}
+                      <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {pusher.profilePicture ? (
+                          <img 
+                            src={pusher.profilePicture} 
+                            alt={pusher.realName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-6 h-6 text-primary-foreground" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-lg line-clamp-1">
                           {pusher.realName}
                         </CardTitle>
                         <CardDescription className="text-sm">
-                          {pusher.user.name || pusher.user.email}
+                          {pusher.user.name || pusher.user.username}
                         </CardDescription>
                         <div className="flex items-center gap-1 mt-1">
                           <Badge variant={getStatusColor(pusher.status)} className="text-xs">
@@ -350,6 +429,23 @@ export default function RentPusherPage() {
                       </div>
                     </div>
                     
+                    {/* Player Tag */}
+                    {pusher.tagPlayer && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Shield className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-mono">{pusher.tagPlayer}</span>
+                      </div>
+                    )}
+                    
+                    {/* Description */}
+                    {pusher.description && (
+                      <div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {pusher.description}
+                        </p>
+                      </div>
+                    )}
+                    
                     {/* Details */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm">
@@ -379,6 +475,17 @@ export default function RentPusherPage() {
                       >
                         {pusher.status === 'AVAILABLE' ? 'Hire Pusher' : 'Unavailable'}
                       </Button>
+                      
+                      {pusher.negotiation && pusher.status === 'AVAILABLE' && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleNegotiate(pusher)}
+                          title="Negotiate Price"
+                        >
+                          <Handshake className="w-4 h-4" />
+                        </Button>
+                      )}
                       
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/pusher/${pusher.id}`}>
@@ -522,6 +629,72 @@ export default function RentPusherPage() {
                     Send Request
                   </>
                 )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Negotiation Dialog */}
+      <Dialog open={showNegotiationDialog} onOpenChange={setShowNegotiationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Negotiate with {selectedPusherForNegotiation?.realName}</DialogTitle>
+            <DialogDescription>
+              Send a negotiation offer with your proposed price. The pusher will review your offer and respond.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleNegotiationSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="proposedPrice">Proposed Price (USD)</Label>
+              <Input
+                id="proposedPrice"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Enter your proposed price"
+                value={negotiationForm.proposedPrice}
+                onChange={(e) => setNegotiationForm(prev => ({ ...prev, proposedPrice: e.target.value }))}
+                required
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                Current price: ${selectedPusherForNegotiation?.price}
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="message">Message</Label>
+              <Textarea
+                id="message"
+                placeholder="Explain why you're proposing this price and any other details..."
+                value={negotiationForm.message}
+                onChange={(e) => setNegotiationForm(prev => ({ ...prev, message: e.target.value }))}
+                className="min-h-[100px]"
+                required
+              />
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button type="submit" disabled={submittingNegotiation} className="flex-1">
+                {submittingNegotiation ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Handshake className="w-4 h-4 mr-2" />
+                    Send Offer
+                  </>
+                )}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowNegotiationDialog(false)}
+                disabled={submittingNegotiation}
+              >
+                Cancel
               </Button>
             </div>
           </form>

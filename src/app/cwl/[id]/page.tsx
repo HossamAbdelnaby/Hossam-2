@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { 
   Shield, 
@@ -47,13 +48,6 @@ interface Clan {
   }
 }
 
-interface ClanStats {
-  totalApplications: number
-  approvedApplications: number
-  pendingApplications: number
-  rejectedApplications: number
-}
-
 interface JoinRequest {
   id: string
   name: string
@@ -68,6 +62,13 @@ interface JoinRequest {
   }
 }
 
+interface ClanStats {
+  totalApplications: number
+  approvedApplications: number
+  pendingApplications: number
+  rejectedApplications: number
+}
+
 export default function ClanDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -78,13 +79,36 @@ export default function ClanDetailsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [approvedMembers, setApprovedMembers] = useState<JoinRequest[]>([])
   
   const params = useParams()
   const router = useRouter()
   const clanId = params.id as string
+  const { toast } = useToast()
   const { user } = useAuth()
 
   const isOwner = user && clan && user.id === clan.owner.id
+
+  // Debug logging
+  console.log('=== Debug Info ===')
+  console.log('User:', user?.id)
+  console.log('Clan Owner:', clan?.owner?.id)
+  console.log('Is Owner:', isOwner)
+  console.log('User exists:', !!user)
+  console.log('Clan exists:', !!clan)
+
+  // Show warning if user is not owner
+  useEffect(() => {
+    if (user && clan && !isOwner) {
+      console.log('Warning: User is not the clan owner')
+      toast({
+        title: "⚠️ صلاحيات محدودة",
+        description: "أنت لست مالك هذا الكلان، لن تتمكن من الموافقة على الطلبات",
+        variant: "destructive",
+        duration: 5000,
+      })
+    }
+  }, [user, clan, isOwner])
 
   useEffect(() => {
     if (clanId) {
@@ -92,6 +116,7 @@ export default function ClanDetailsPage() {
       fetchClanStats()
       if (user) {
         fetchJoinRequests()
+        fetchApprovedMembers()
       }
     }
   }, [clanId, user])
@@ -143,28 +168,102 @@ export default function ClanDetailsPage() {
     }
   }
 
+  const fetchApprovedMembers = async () => {
+    try {
+      const response = await fetch(`/api/cwl/${clanId}/applications`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        const approved = data.applications.filter((app: JoinRequest) => 
+          normalizeStatus(app.status) === 'accepted'
+        )
+        setApprovedMembers(approved)
+      }
+    } catch (err) {
+      console.error('Failed to fetch approved members:', err)
+    }
+  }
+
+  const normalizeStatus = (status: string) => {
+    return status.toLowerCase()
+  }
+
+  const formatStatus = (status: string) => {
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+  }
+
   const handleRequestAction = async (requestId: string, action: 'approve' | 'reject') => {
     try {
+      // Check if user is owner before proceeding
+      if (!isOwner) {
+        toast({
+          title: "❌ خطأ في الصلاحيات",
+          description: "أنت لست مالك هذا الكلان، لا يمكنك الموافقة على الطلبات",
+          variant: "destructive",
+          duration: 5000,
+        })
+        return
+      }
+
       setActionLoading(requestId)
-      const response = await fetch(`/api/cwl/my-clan/applications/${requestId}`, {
+      
+      console.log('=== Starting handleRequestAction ===')
+      console.log('Request ID:', requestId)
+      console.log('Action:', action)
+      console.log('Clan ID:', clanId)
+      console.log('User ID:', user?.id)
+      console.log('Clan Owner ID:', clan?.owner?.id)
+      console.log('Is Owner:', isOwner)
+      
+      const response = await fetch(`/api/cwl/${clanId}/applications`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ requestId, action }),
       })
 
+      console.log('Response status:', response.status)
+      console.log('Response ok:', response.ok)
+
       if (!response.ok) {
-        throw new Error(`Failed to ${action} request`)
+        const errorData = await response.json()
+        console.log('Error response:', errorData)
+        throw new Error(errorData.error || `Failed to ${action} request`)
       }
 
-      // Refresh data
-      await fetchJoinRequests()
-      await fetchClanStats()
+      const responseData = await response.json()
+      console.log('Success response:', responseData)
+
+      // Show success message
+      const actionText = action === 'approve' ? 'الموافقة' : 'الرفض'
+      const actionResult = action === 'approve' ? 'قبول' : 'رفض'
+      
+      toast({
+        title: "✅ تم بنجاح",
+        description: `تم ${actionResult} طلب الانضمام بنجاح`,
+        duration: 2000,
+      })
+      
+      // Redirect to members page immediately
+      setTimeout(() => {
+        console.log('Redirecting to members page...')
+        router.push(`/cwl/${clanId}/members`)
+      }, 1500)
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to ${action} request`)
+      const errorMessage = err instanceof Error ? err.message : `Failed to ${action} request`
+      console.log('Error in handleRequestAction:', errorMessage)
+      setError(errorMessage)
+      toast({
+        title: "❌ خطأ",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 4000,
+      })
     } finally {
       setActionLoading(null)
+      console.log('=== Ending handleRequestAction ===')
     }
   }
 
@@ -253,14 +352,6 @@ export default function ClanDetailsPage() {
                     <Link href={`/cwl/${clan.id}/apply`}>
                       <User className="w-4 h-4 mr-2" />
                       Apply to Join
-                    </Link>
-                  </Button>
-                )}
-                {isOwner && (
-                  <Button asChild>
-                    <Link href="/cwl/profile">
-                      <Eye className="w-4 h-4 mr-2" />
-                      Manage Clan
                     </Link>
                   </Button>
                 )}
@@ -482,21 +573,94 @@ export default function ClanDetailsPage() {
                       </Button>
                     )}
                     
-                    {isOwner && (
-                      <Button asChild className="w-full">
-                        <Link href="/cwl/profile">
-                          <Eye className="w-4 h-4 mr-2" />
-                          Manage Applications
-                        </Link>
-                      </Button>
-                    )}
-                    
                     <Button variant="outline" asChild className="w-full">
                       <Link href={`/cwl/${clan.id}/apply`}>
                         <Eye className="w-4 h-4 mr-2" />
                         View Application Page
                       </Link>
                     </Button>
+                    
+                    {user && (
+                      <Button variant="outline" asChild className="w-full">
+                        <Link href={`/cwl/${clanId}/members`}>
+                          <Users className="w-4 h-4 mr-2" />
+                          My Clan ({approvedMembers.length})
+                        </Link>
+                      </Button>
+                    )}
+                    
+                    {/* Debug Button - Show Debug Info */}
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        toast({
+                          title: "معلومات التصحيح",
+                          description: `User ID: ${user?.id || 'None'}\nClan Owner: ${clan?.owner?.id || 'None'}\nIs Owner: ${isOwner}\nClan ID: ${clanId}`,
+                          duration: 10000,
+                        })
+                      }}
+                    >
+                      <Shield className="w-4 h-4 mr-2" />
+                      Show Debug Info
+                    </Button>
+                    
+                    {/* Debug Button - Create Test Application */}
+                    {isOwner && joinRequests.length === 0 && (
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={async () => {
+                          try {
+                            toast({
+                              title: "إنشاء طلب اختباري",
+                              description: "جاري إنشاء طلب انضمام اختباري...",
+                              duration: 2000,
+                            })
+                            
+                            const response = await fetch(`/api/cwl/${clanId}/apply`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                name: 'Test Player',
+                                playerTag: '#TEST123',
+                                paymentMethod: 'PayPal'
+                              }),
+                            })
+                            
+                            if (response.ok) {
+                              toast({
+                                title: "✅ تم الإنشاء",
+                                description: "تم إنشاء طلب اختباري بنجاح",
+                                duration: 3000,
+                              })
+                              // Refresh the requests
+                              fetchJoinRequests()
+                            } else {
+                              const errorData = await response.json()
+                              toast({
+                                title: "❌ خطأ",
+                                description: errorData.error || "فشل إنشاء الطلب الاختباري",
+                                variant: "destructive",
+                                duration: 4000,
+                              })
+                            }
+                          } catch (error) {
+                            toast({
+                              title: "❌ خطأ",
+                              description: "حدث خطأ أثناء إنشاء الطلب الاختباري",
+                              variant: "destructive",
+                              duration: 4000,
+                            })
+                          }
+                        }}
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        Create Test Application
+                      </Button>
+                    )}
                     
                     <Button variant="outline" asChild className="w-full">
                       <Link href="/cwl">
@@ -533,32 +697,26 @@ export default function ClanDetailsPage() {
                     <div className="space-y-4">
                       {joinRequests.map((request) => (
                         <Card key={request.id} className={`border-l-4 ${
-                          request.status === 'pending' ? 'border-l-yellow-500' :
-                          request.status === 'approved' ? 'border-l-green-500' :
+                          normalizeStatus(request.status) === 'pending' ? 'border-l-yellow-500' :
+                          normalizeStatus(request.status) === 'accepted' ? 'border-l-green-500' :
                           'border-l-red-500'
                         }`}>
                           <CardContent className="pt-6">
                             <div className="flex items-start justify-between">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <User className="w-4 h-4 text-muted-foreground" />
-                                  <span className="font-semibold">{request.name}</span>
-                                  <Badge variant="outline" className="text-xs">
-                                    {request.playerTag}
-                                  </Badge>
+                                  <h3 className="font-semibold">{request.name}</h3>
                                   <Badge variant={
-                                    request.status === 'pending' ? 'outline' :
-                                    request.status === 'approved' ? 'default' : 'destructive'
-                                  } className="text-xs">
-                                    {request.status}
+                                    normalizeStatus(request.status) === 'pending' ? 'secondary' :
+                                    normalizeStatus(request.status) === 'accepted' ? 'default' :
+                                    'destructive'
+                                  }>
+                                    {formatStatus(request.status)}
                                   </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Mail className="w-4 h-4" />
-                                  <span>{request.user.email}</span>
-                                  {request.user.name && (
-                                    <span>({request.user.name})</span>
-                                  )}
+                                  <User className="w-4 h-4" />
+                                  <span>{request.user.name || request.user.username}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Calendar className="w-4 h-4" />
@@ -568,7 +726,7 @@ export default function ClanDetailsPage() {
                                 </div>
                               </div>
                               
-                              {request.status === 'pending' && (
+                              {normalizeStatus(request.status) === 'pending' && (
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
@@ -629,15 +787,17 @@ export default function ClanDetailsPage() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Clan Name</p>
-                        <p className="font-semibold">{clan.name}</p>
+                        <p className="text-lg font-semibold">{clan.name}</p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Clan Tag</p>
-                        <p className="font-semibold">{clan.tag}</p>
+                        <p className="text-lg font-semibold">{clan.tag}</p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">League Level</p>
-                        <Badge variant="outline">League {clan.leagueLevel || 'N/A'}</Badge>
+                        <Badge variant="outline" className="text-sm">
+                          League {clan.leagueLevel || 'N/A'}
+                        </Badge>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Status</p>
@@ -645,6 +805,25 @@ export default function ClanDetailsPage() {
                           {clan.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* View Members */}
+                  <div className="pt-6 border-t">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Clan Members
+                    </h3>
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        View and manage your approved clan members.
+                      </p>
+                      <Button asChild className="w-full">
+                        <Link href={`/cwl/${clanId}/members`}>
+                          <Users className="w-4 h-4 mr-2" />
+                          View All Members ({approvedMembers.length})
+                        </Link>
+                      </Button>
                     </div>
                   </div>
 
@@ -664,7 +843,11 @@ export default function ClanDetailsPage() {
                         onClick={() => setShowDeleteConfirm(true)}
                         disabled={deleteLoading}
                       >
-                        <Trash2 className="w-4 h-4 mr-2" />
+                        {deleteLoading ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 mr-2" />
+                        )}
                         Delete Clan
                       </Button>
                     ) : (

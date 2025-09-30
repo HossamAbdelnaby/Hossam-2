@@ -31,6 +31,8 @@ interface PusherProfile {
   trophies: number;
   realName: string;
   profilePicture?: string;
+  description?: string;
+  tagPlayer?: string;
   price: number;
   paymentMethod: string;
   negotiation: boolean;
@@ -62,6 +64,8 @@ export default function PusherProfilePage() {
   const [profile, setProfile] = useState<PusherProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   const { user } = useAuth();
 
@@ -102,13 +106,61 @@ export default function PusherProfilePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update contract');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update contract');
       }
 
       // Refresh profile to get updated contracts
       fetchProfile();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update contract');
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    try {
+      setDeleteLoading(true);
+      
+      const response = await fetch('/api/pusher/profile', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete profile');
+      }
+
+      // Redirect to home page after successful deletion
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete profile');
+      setDeleteConfirm(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: 'AVAILABLE' | 'UNAVAILABLE') => {
+    try {
+      const response = await fetch('/api/pusher/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update status');
+      }
+
+      // Refresh profile to get updated status
+      fetchProfile();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status');
     }
   };
 
@@ -254,19 +306,39 @@ export default function PusherProfilePage() {
                 Profile Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Profile Picture */}
+              {profile.profilePicture && (
+                <div>
+                  <h4 className="font-medium mb-2">Profile Picture</h4>
+                  <div className="w-32 h-32 rounded-lg overflow-hidden">
+                    <img 
+                      src={profile.profilePicture} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+              
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-medium mb-2">Contact Information</h4>
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-muted-foreground" />
-                      <span>{profile.user.name || profile.user.email}</span>
+                      <span>{profile.user.name || profile.user.username}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Globe className="w-4 h-4 text-muted-foreground" />
                       <span>{profile.paymentMethod}</span>
                     </div>
+                    {profile.tagPlayer && (
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-muted-foreground" />
+                        <span>{profile.tagPlayer}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -281,6 +353,26 @@ export default function PusherProfilePage() {
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       <span>{profile.availability === 'STAY' ? 'Full Season Availability' : 'End of Season Only'}</span>
                     </div>
+                    {profile.tagPlayer && (
+                      <div className="flex items-center gap-2 p-2 bg-primary/5 rounded-md">
+                        <Shield className="w-4 h-4 text-primary" />
+                        <span className="font-medium">Player Tag:</span>
+                        <span className="font-mono text-xs">{profile.tagPlayer}</span>
+                      </div>
+                    )}
+                    {profile.description && (
+                      <div className="mt-3 p-3 bg-muted/30 rounded-md">
+                        <div className="flex items-start gap-2">
+                          <MessageCircle className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <span className="font-medium text-sm">Service Description:</span>
+                            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+                              {profile.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {profile.negotiation && (
                       <div className="flex items-center gap-2">
                         <MessageCircle className="w-4 h-4 text-muted-foreground" />
@@ -290,19 +382,6 @@ export default function PusherProfilePage() {
                   </div>
                 </div>
               </div>
-              
-              {profile.profilePicture && (
-                <div>
-                  <h4 className="font-medium mb-2">Profile Picture</h4>
-                  <div className="w-32 h-32 rounded-lg overflow-hidden">
-                    <img 
-                      src={profile.profilePicture} 
-                      alt="Profile" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -357,6 +436,30 @@ export default function PusherProfilePage() {
                             <XCircle className="w-4 h-4" />
                             Reject
                           </Button>
+                        </div>
+                      )}
+                      
+                      {contract.status === 'ACCEPTED' && contract.payment && contract.payment.status === 'PENDING' && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="gap-1">
+                            <Clock className="w-3 h-3" />
+                            Awaiting Payment
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            Client needs to pay ${contract.payment.amount}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {contract.status === 'ACCEPTED' && contract.payment && contract.payment.status === 'COMPLETED' && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default" className="gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Paid
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            Payment completed
+                          </span>
                         </div>
                       )}
                     </div>
@@ -438,17 +541,77 @@ export default function PusherProfilePage() {
               </Button>
               
               {profile.status === 'AVAILABLE' && (
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => handleStatusChange('UNAVAILABLE')}
+                >
                   <Clock className="w-4 h-4 mr-2" />
                   Mark as Unavailable
                 </Button>
               )}
               
               {profile.status === 'UNAVAILABLE' && (
-                <Button className="w-full">
+                <Button 
+                  className="w-full"
+                  onClick={() => handleStatusChange('AVAILABLE')}
+                >
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Mark as Available
                 </Button>
+              )}
+
+              {/* Delete Profile Button */}
+              {!deleteConfirm ? (
+                <Button 
+                  variant="destructive" 
+                  className="w-full"
+                  onClick={() => setDeleteConfirm(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Profile
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <p className="text-sm font-medium text-destructive mb-1">
+                      ⚠️ Delete Profile Permanently?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      This action cannot be undone. All your profile data, contracts, and messages will be permanently deleted.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={handleDeleteProfile}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Confirm Delete
+                        </>
+                      )}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => setDeleteConfirm(false)}
+                      disabled={deleteLoading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

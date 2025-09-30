@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
 import { 
   ArrowLeft, 
@@ -23,7 +27,8 @@ import {
   Shield,
   Globe,
   MapPin,
-  Send
+  Send,
+  Handshake
 } from "lucide-react";
 
 interface PusherProfile {
@@ -31,6 +36,8 @@ interface PusherProfile {
   trophies: number;
   realName: string;
   profilePicture?: string;
+  description?: string;
+  tagPlayer?: string;
   price: number;
   paymentMethod: string;
   negotiation: boolean;
@@ -54,6 +61,13 @@ export default function PusherProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showHireDialog, setShowHireDialog] = useState(false);
+  const [showNegotiationDialog, setShowNegotiationDialog] = useState(false);
+  const [negotiationForm, setNegotiationForm] = useState({
+    message: "",
+    proposedPrice: "",
+  });
+  const [submittingNegotiation, setSubmittingNegotiation] = useState(false);
+  const [negotiationSuccess, setNegotiationSuccess] = useState(false);
   
   const params = useParams();
   const router = useRouter();
@@ -93,6 +107,49 @@ export default function PusherProfilePage() {
       return;
     }
     router.push(`/rent-pusher?hire=${pusherId}`);
+  };
+
+  const handleNegotiate = () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setShowNegotiationDialog(true);
+  };
+
+  const handleNegotiationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pusher || !user) return;
+
+    setSubmittingNegotiation(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/pusher/negotiation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pusherId: pusher.id,
+          message: negotiationForm.message,
+          proposedPrice: parseFloat(negotiationForm.proposedPrice),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send negotiation request');
+      }
+
+      setNegotiationSuccess(true);
+      setShowNegotiationDialog(false);
+      setNegotiationForm({ message: "", proposedPrice: "" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send negotiation request');
+    } finally {
+      setSubmittingNegotiation(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -170,7 +227,7 @@ export default function PusherProfilePage() {
               <div>
                 <h1 className="text-3xl font-bold mb-2">{pusher.realName}</h1>
                 <p className="text-muted-foreground mb-3">
-                  {pusher.user.name || pusher.user.email}
+                  {pusher.user.name || pusher.user.username}
                 </p>
                 <div className="flex items-center gap-3 flex-wrap">
                   <Badge variant={getStatusColor(pusher.status)}>
@@ -195,6 +252,22 @@ export default function PusherProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Error and Success Messages */}
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {negotiationSuccess && (
+        <Alert className="mb-6 border-green-200 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Negotiation request sent successfully! The pusher will review your offer.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content */}
@@ -282,6 +355,30 @@ export default function PusherProfilePage() {
                 </div>
               </div>
               
+              {/* Player Tag */}
+              {pusher.tagPlayer && (
+                <div>
+                  <h4 className="font-medium mb-2">Player Information</h4>
+                  <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-md">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <span className="font-medium">Player Tag:</span>
+                    <span className="font-mono text-sm">{pusher.tagPlayer}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Description */}
+              {pusher.description && (
+                <div>
+                  <h4 className="font-medium mb-2">Service Description</h4>
+                  <div className="p-4 bg-muted/30 rounded-md">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {pusher.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               <div>
                 <h4 className="font-medium mb-2">Experience</h4>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -364,7 +461,7 @@ export default function PusherProfilePage() {
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-muted-foreground" />
-                <span>{pusher.user.name || pusher.user.email}</span>
+                <span>{pusher.user.name || pusher.user.username}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-muted-foreground" />
@@ -399,10 +496,10 @@ export default function PusherProfilePage() {
                 </Link>
               </Button>
               
-              {user && user.id !== pusher.user.id && (
-                <Button variant="outline" className="w-full">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Send Message
+              {user && user.id !== pusher.user.id && pusher.negotiation && pusher.status === 'AVAILABLE' && (
+                <Button variant="outline" className="w-full" onClick={handleNegotiate}>
+                  <Handshake className="w-4 h-4 mr-2" />
+                  Negotiate Price
                 </Button>
               )}
             </CardContent>
@@ -440,6 +537,72 @@ export default function PusherProfilePage() {
           </Card>
         </div>
       </div>
+
+      {/* Negotiation Dialog */}
+      <Dialog open={showNegotiationDialog} onOpenChange={setShowNegotiationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Negotiate with {pusher?.realName}</DialogTitle>
+            <DialogDescription>
+              Send a negotiation offer with your proposed price. The pusher will review your offer and respond.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleNegotiationSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="proposedPrice">Proposed Price (USD)</Label>
+              <Input
+                id="proposedPrice"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Enter your proposed price"
+                value={negotiationForm.proposedPrice}
+                onChange={(e) => setNegotiationForm(prev => ({ ...prev, proposedPrice: e.target.value }))}
+                required
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                Current price: ${pusher?.price}
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="message">Message</Label>
+              <Textarea
+                id="message"
+                placeholder="Explain why you're proposing this price and any other details..."
+                value={negotiationForm.message}
+                onChange={(e) => setNegotiationForm(prev => ({ ...prev, message: e.target.value }))}
+                className="min-h-[100px]"
+                required
+              />
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button type="submit" disabled={submittingNegotiation} className="flex-1">
+                {submittingNegotiation ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Handshake className="w-4 h-4 mr-2" />
+                    Send Offer
+                  </>
+                )}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowNegotiationDialog(false)}
+                disabled={submittingNegotiation}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

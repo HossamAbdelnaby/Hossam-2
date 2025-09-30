@@ -59,7 +59,26 @@ export async function PUT(
 
     const { id: packageId } = await params;
     const body = await request.json();
-    const { price, currency } = body;
+    const { price, currency, name, description, features, color, isActive } = body;
+
+    // Check if package exists and is editable
+    const existingPackage = await db.packagePrice.findUnique({
+      where: { id: packageId }
+    });
+
+    if (!existingPackage) {
+      return NextResponse.json(
+        { error: 'Package not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!existingPackage.isEditable) {
+      return NextResponse.json(
+        { error: 'This package cannot be edited' },
+        { status: 403 }
+      );
+    }
 
     if (typeof price !== 'number' || price < 0) {
       return NextResponse.json(
@@ -68,13 +87,22 @@ export async function PUT(
       );
     }
 
+    const updateData: any = {
+      price,
+      currency: currency || 'USD',
+      updatedBy: decoded.userId
+    };
+
+    // Add optional fields if provided
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (features !== undefined) updateData.features = JSON.stringify(features);
+    if (color !== undefined) updateData.color = color;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
     const updatedPackage = await db.packagePrice.update({
       where: { id: packageId },
-      data: {
-        price,
-        currency: currency || 'USD',
-        updatedBy: decoded.userId
-      }
+      data: updateData
     });
 
     // Log admin action
@@ -83,7 +111,7 @@ export async function PUT(
         action: 'UPDATE_PACKAGE_PRICE',
         targetId: packageId,
         targetType: 'PackagePrice',
-        details: JSON.stringify({ price, currency }),
+        details: JSON.stringify({ price, currency, name, description, features, color, isActive }),
         userId: decoded.userId,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown'

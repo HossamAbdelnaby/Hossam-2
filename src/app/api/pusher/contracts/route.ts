@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { ContractStatus } from '@prisma/client';
+import { ContractStatus, PusherStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (pusher.status !== 'AVAILABLE') {
+    if (pusher.status !== PusherStatus.AVAILABLE) {
       return NextResponse.json(
         { error: 'Pusher is not available for hire' },
         { status: 400 }

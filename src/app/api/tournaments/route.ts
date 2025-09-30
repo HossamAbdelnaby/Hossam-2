@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
       packageType,
       graphicRequests,
       maxTeams,
+      tournamentLogo, // New field for tournament logo
+      paymentCompleted = false, // New field to indicate if payment is completed
     } = body;
 
     // Validate required fields
@@ -47,6 +49,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid package type' },
         { status: 400 }
+      );
+    }
+
+    // Check if payment is required for paid packages
+    const paidPackages = ['PAID_GRAPHICS', 'PAID_DISCORD_BOT', 'FULL_MANAGEMENT'];
+    const requiresPayment = paidPackages.includes(packageType);
+
+    // For paid packages, payment must be completed before creating tournament
+    if (requiresPayment && !paymentCompleted) {
+      return NextResponse.json(
+        { error: 'Payment required before creating tournament' },
+        { status: 402 } // 402 Payment Required
       );
     }
 
@@ -84,8 +98,9 @@ export async function POST(request: NextRequest) {
         bracketType,
         packageType,
         graphicRequests,
+        tournamentLogo, // Add tournament logo
         organizerId: decoded.userId,
-        status: TournamentStatus.DRAFT,
+        status: requiresPayment ? TournamentStatus.DRAFT : TournamentStatus.REGISTRATION_OPEN, // Paid packages start as DRAFT until payment confirmed
       },
       include: {
         organizer: {

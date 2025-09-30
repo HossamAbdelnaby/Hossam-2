@@ -79,7 +79,7 @@ export default function DashboardPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Welcome back, {user.name || user.email}!</h1>
+          <h1 className="text-3xl font-bold">Welcome back, {user.name || user.username}!</h1>
           <p className="text-muted-foreground">Manage your tournaments and services</p>
         </div>
         <Button onClick={logout} variant="outline">
@@ -269,6 +269,20 @@ export default function DashboardPage() {
           <CardContent>
             <Button className="w-full" variant="outline" onClick={() => router.push('/chat')}>
               Open Chat
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>My Contracts</CardTitle>
+            <CardDescription>
+              View and manage your player rental contracts
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" variant="outline" onClick={() => router.push('/contracts')}>
+              View Contracts
             </Button>
           </CardContent>
         </Card>

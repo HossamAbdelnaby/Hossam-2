@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import jwt from 'jsonwebtoken'
+import * as jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest) {
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
     
-    const { name, username, email, phone, language, avatar } = await request.json()
+    const { name, username, email, phone, description, language, avatar } = await request.json()
 
     // Check if user exists
     const existingUser = await db.user.findUnique({
@@ -66,6 +66,7 @@ export async function PUT(request: NextRequest) {
         username,
         email,
         phone: phone || null,
+        description: description || null,
         language,
         avatar: avatar || null
       }
@@ -80,6 +81,7 @@ export async function PUT(request: NextRequest) {
         username: updatedUser.username,
         name: updatedUser.name,
         phone: updatedUser.phone,
+        description: updatedUser.description,
         role: updatedUser.role,
         language: updatedUser.language,
         avatar: updatedUser.avatar

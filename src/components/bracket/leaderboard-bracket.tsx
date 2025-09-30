@@ -16,6 +16,19 @@ export function LeaderboardBracketDisplay({
   bracket, 
   onMatchClick 
 }: LeaderboardBracketDisplayProps) {
+  // Safety check - ensure bracket and standings exist
+  if (!bracket?.standings || !Array.isArray(bracket.standings)) {
+    return (
+      <div className="w-full">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground">No standings data available. Please add teams and matches to the tournament.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6">
       {/* Top 3 Podium */}
@@ -29,7 +42,7 @@ export function LeaderboardBracketDisplay({
         <CardContent>
           <div className="flex justify-center items-end gap-8 py-6">
             {/* 2nd Place */}
-            {bracket.standings[1] && (
+            {bracket.standings.length > 1 && bracket.standings[1] && (
               <div className="flex flex-col items-center">
                 <div className="text-center mb-2">
                   <Medal className="w-8 h-8 text-gray-400 mx-auto mb-1" />
@@ -49,7 +62,7 @@ export function LeaderboardBracketDisplay({
             )}
 
             {/* 1st Place */}
-            {bracket.standings[0] && (
+            {bracket.standings.length > 0 && bracket.standings[0] && (
               <div className="flex flex-col items-center -mt-4">
                 <div className="text-center mb-2">
                   <Trophy className="w-10 h-10 text-yellow-500 mx-auto mb-1" />
@@ -69,7 +82,7 @@ export function LeaderboardBracketDisplay({
             )}
 
             {/* 3rd Place */}
-            {bracket.standings[2] && (
+            {bracket.standings.length > 2 && bracket.standings[2] && (
               <div className="flex flex-col items-center">
                 <div className="text-center mb-2">
                   <Award className="w-8 h-8 text-orange-600 mx-auto mb-1" />

@@ -41,6 +41,7 @@ export function BracketDisplay({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<BracketMatch | null>(null);
   const [isPerformingDraw, setIsPerformingDraw] = useState(false);
+  const [isGeneratingLosers, setIsGeneratingLosers] = useState(false);
 
   useEffect(() => {
     fetchBracketData();
@@ -141,6 +142,29 @@ export function BracketDisplay({
       setError("Failed to perform random draw");
     } finally {
       setIsPerformingDraw(false);
+    }
+  };
+
+  const handleGenerateLosersBracket = async () => {
+    try {
+      setIsGeneratingLosers(true);
+      const response = await fetch(`/api/tournaments/${tournamentId}/bracket/generate-losers`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh bracket data after generating losers bracket
+        await fetchBracketData();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to generate losers bracket");
+      }
+    } catch (error) {
+      console.error("Error generating losers bracket:", error);
+      setError("Failed to generate losers bracket");
+    } finally {
+      setIsGeneratingLosers(false);
     }
   };
 
@@ -295,6 +319,17 @@ export function BracketDisplay({
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
+          {canManage && bracketType === 'DOUBLE_ELIMINATION' && (
+            <Button 
+              variant="default" 
+              onClick={handleGenerateLosersBracket}
+              disabled={isGeneratingLosers}
+              className="gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              {isGeneratingLosers ? 'Generating...' : 'Generate Losers Bracket'}
+            </Button>
+          )}
           {canManage && (
             <Button 
               variant="default" 

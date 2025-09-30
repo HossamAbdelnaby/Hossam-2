@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { 
   LayoutDashboard, 
   Users, 
+  User,
   Trophy, 
   DollarSign, 
   Settings, 
@@ -42,6 +43,18 @@ const sidebarItems = [
     href: "/admin/users",
     icon: Users,
     description: "Manage platform users"
+  },
+  {
+    title: "Pushers",
+    href: "/admin/pushers",
+    icon: User,
+    description: "Manage pusher players"
+  },
+  {
+    title: "Clans",
+    href: "/admin/clans",
+    icon: Shield,
+    description: "Manage CWL clans"
   },
   {
     title: "Tournaments",
@@ -108,6 +121,7 @@ const sidebarItems = [
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading) {
@@ -146,7 +160,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <nav className="space-y-1">
           {sidebarItems.map((item) => {
             const Icon = item.icon;
-            const isActive = window.location.pathname === item.href;
+            const isActive = pathname === item.href;
             
             return (
               <a
@@ -170,9 +184,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <div className="px-6 py-4 border-t">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-sm font-medium">{user.name || user.email}</p>
-            <Badge variant={user.role === 'SUPER_ADMIN' ? 'destructive' : 'default'}>
-              {user.role}
+            <p className="text-sm font-medium">{user?.name || user?.email}</p>
+            <Badge variant={user?.role === 'SUPER_ADMIN' ? 'destructive' : 'default'}>
+              {user?.role}
             </Badge>
           </div>
         </div>
@@ -224,12 +238,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 </SheetTrigger>
               </Sheet>
               <h1 className="text-lg font-semibold">
-                {sidebarItems.find(item => item.href === window.location.pathname)?.title || 'Admin Dashboard'}
+                {sidebarItems.find(item => item.href === pathname)?.title || 'Admin Dashboard'}
               </h1>
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant={user.role === 'SUPER_ADMIN' ? 'destructive' : 'default'}>
-                {user.role}
+              <Badge variant={user?.role === 'SUPER_ADMIN' ? 'destructive' : 'default'}>
+                {user?.role}
               </Badge>
             </div>
           </div>

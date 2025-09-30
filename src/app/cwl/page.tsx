@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   Crown,
+  Settings,
   Loader2
 } from 'lucide-react'
 

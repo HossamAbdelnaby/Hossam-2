@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { 
   User, 
-  Mail, 
   Phone, 
   Globe, 
   Calendar, 
@@ -21,7 +20,8 @@ import {
   Copy,
   Check,
   Crown,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FileText
 } from 'lucide-react'
 
 interface ProfileDialogProps {
@@ -31,6 +31,7 @@ interface ProfileDialogProps {
     username: string
     name?: string
     phone?: string
+    description?: string
     role: string
     language: string
     avatar?: string
@@ -79,7 +80,6 @@ export function ProfileDialog({ user, onLogout, children }: ProfileDialogProps) 
         body: JSON.stringify({
           name: user.name,
           username: user.username,
-          email: user.email,
           phone: user.phone,
           language: user.language,
           avatar: avatarUrl
@@ -157,9 +157,9 @@ export function ProfileDialog({ user, onLogout, children }: ProfileDialogProps) 
           <div className="flex flex-col items-center space-y-4">
             <div className="relative">
               <Avatar className="w-20 h-20 ring-4 ring-primary/10">
-                <AvatarImage src={currentAvatar} alt={user.name || user.email} />
+                <AvatarImage src={currentAvatar} alt={user.name || user.username} />
                 <AvatarFallback className="text-lg bg-gradient-to-br from-primary/20 to-primary/10 text-primary">
-                  {(user.name || user.email).charAt(0).toUpperCase()}
+                  {(user.name || user.username).charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
@@ -250,29 +250,17 @@ export function ProfileDialog({ user, onLogout, children }: ProfileDialogProps) 
 
           {/* Profile Details */}
           <div className="space-y-4">
-            <div className="flex items-center gap-3 group">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Mail className="w-4 h-4 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-blue-900">Email</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-blue-700 truncate">{user.email}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 hover:bg-blue-100"
-                    onClick={() => copyToClipboard(user.email, 'email')}
-                  >
-                    {copied === 'email' ? (
-                      <Check className="w-3 h-3 text-green-600" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-blue-500" />
-                    )}
-                  </Button>
+            {user.description && (
+              <div className="flex items-start gap-3 group">
+                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-blue-900">About Me</p>
+                  <p className="text-sm text-blue-700 leading-relaxed">{user.description}</p>
                 </div>
               </div>
-            </div>
+            )}
 
             {user.phone && (
               <div className="flex items-center gap-3 group">

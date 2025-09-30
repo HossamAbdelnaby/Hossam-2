@@ -1,9 +1,13 @@
 // server.ts - Next.js Standalone + Socket.IO
+import { config } from 'dotenv';
 import { setupSocket } from '@/lib/socket';
 import { TournamentScheduler } from '@/lib/scheduler';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import next from 'next';
+
+// Load environment variables
+config();
 
 const dev = process.env.NODE_ENV !== 'production';
 const currentPort = 3000;

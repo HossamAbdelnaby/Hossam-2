@@ -1,17 +1,23 @@
 import { updateAllTournamentStatuses, TournamentStatusUpdate } from '@/lib/tournament-status';
 
+// Global singleton instance
+let globalSchedulerInstance: TournamentScheduler | null = null;
+
 export class TournamentScheduler {
-  private static instance: TournamentScheduler;
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private lastCheckTime: Date | null = null;
 
-  private constructor() {}
+  private constructor() {
+    console.log('TournamentScheduler instance created');
+  }
 
   public static getInstance(): TournamentScheduler {
-    if (!TournamentScheduler.instance) {
-      TournamentScheduler.instance = new TournamentScheduler();
+    if (!globalSchedulerInstance) {
+      console.log('Creating new TournamentScheduler instance');
+      globalSchedulerInstance = new TournamentScheduler();
     }
-    return TournamentScheduler.instance;
+    return globalSchedulerInstance;
   }
 
   public start(): void {
@@ -32,6 +38,8 @@ export class TournamentScheduler {
     this.intervalId = setInterval(() => {
       this.checkTournamentStatuses();
     }, 60000);
+    
+    console.log('Tournament scheduler started successfully');
   }
 
   public stop(): void {
@@ -47,6 +55,8 @@ export class TournamentScheduler {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    
+    console.log('Tournament scheduler stopped successfully');
   }
 
   private async checkTournamentStatuses(): Promise<void> {
@@ -54,6 +64,7 @@ export class TournamentScheduler {
       console.log('Checking tournament statuses for automatic updates...');
       
       const updates = await updateAllTournamentStatuses();
+      this.lastCheckTime = new Date();
 
       if (updates.length > 0) {
         console.log(`Automatically updated ${updates.length} tournament statuses:`);
@@ -74,9 +85,10 @@ export class TournamentScheduler {
     lastCheck?: Date;
     nextCheck?: Date;
   }> {
+    console.log('Getting scheduler status - isRunning:', this.isRunning);
     return {
       isRunning: this.isRunning,
-      lastCheck: new Date(), // In a real implementation, you'd store the last check time
+      lastCheck: this.lastCheckTime,
       nextCheck: this.isRunning ? new Date(Date.now() + 60000) : undefined,
     };
   }
@@ -86,6 +98,7 @@ export class TournamentScheduler {
     
     try {
       const updates = await updateAllTournamentStatuses();
+      this.lastCheckTime = new Date();
       
       console.log(`Force check completed: ${updates.length} tournaments updated`);
       return updates;

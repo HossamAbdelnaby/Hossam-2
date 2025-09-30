@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
+import * as jwt from 'jsonwebtoken'
 import { db } from '@/lib/db'
+import { logAuthActivity, getClientIP, getUserAgent } from '@/lib/activity-logger'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -22,6 +23,16 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
+      // Log failed login attempt
+      await logAuthActivity(
+        'Failed Login',
+        'Login attempt with non-existent email',
+        { id: 'unknown', email, username: 'unknown', name: 'Unknown', role: 'UNKNOWN' },
+        'error',
+        getClientIP(request),
+        getUserAgent(request)
+      );
+      
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -31,6 +42,16 @@ export async function POST(request: NextRequest) {
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
+      // Log failed login attempt
+      await logAuthActivity(
+        'Failed Login',
+        'Login attempt with incorrect password',
+        user,
+        'error',
+        getClientIP(request),
+        getUserAgent(request)
+      );
+      
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -39,10 +60,20 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     )
+
+    // Log successful login
+    await logAuthActivity(
+      'Login',
+      'User successfully logged in to the system',
+      user,
+      'success',
+      getClientIP(request),
+      getUserAgent(request)
+    );
 
     // Create response with user data (excluding password)
     const response = NextResponse.json({

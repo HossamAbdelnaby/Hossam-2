@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Users, 
   Search, 
@@ -20,7 +21,9 @@ import {
   User,
   MoreHorizontal,
   Eye,
-  Edit
+  Edit,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 
 interface UserData {
@@ -47,6 +50,9 @@ export default function UsersManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -55,15 +61,46 @@ export default function UsersManagementPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError("");
       const response = await fetch('/api/admin/users');
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users || []);
+      } else {
+        setError("Failed to fetch users");
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (deleteConfirm !== userId) {
+      setDeleteConfirm(userId);
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        setDeleteConfirm(null);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setError("Network error. Please try again.");
+    } finally {
+      setDeleting(false);
     }
   };
 

@@ -20,6 +20,14 @@ export function DoubleEliminationBracketDisplay({
   bracket, 
   onMatchClick 
 }: DoubleEliminationBracketDisplayProps) {
+  if (!bracket || !bracket.winnersBracket || !bracket.losersBracket) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">Double elimination bracket data not available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
       <Tabs defaultValue="winners" className="w-full">
@@ -61,6 +69,14 @@ function WinnersBracketDisplay({
   bracket: WinnersBracket; 
   onMatchClick?: (match: BracketMatch) => void;
 }) {
+  if (!bracket || !bracket.rounds || !Array.isArray(bracket.rounds)) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">Winners bracket data not available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full overflow-x-auto">
       <div className="flex min-w-max gap-8 p-4">
@@ -115,6 +131,14 @@ function LosersBracketDisplay({
   bracket: LosersBracket; 
   onMatchClick?: (match: BracketMatch) => void;
 }) {
+  if (!bracket || !bracket.rounds || !Array.isArray(bracket.rounds)) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">Losers bracket data not available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full overflow-x-auto">
       <div className="flex min-w-max gap-6 p-4">
@@ -341,11 +365,17 @@ function MatchCard({
 }
 
 function getWinnersFinalist(finalRound: any) {
+  if (!finalRound || !finalRound.matches || !Array.isArray(finalRound.matches) || finalRound.matches.length === 0) {
+    return null;
+  }
   const finalMatch = finalRound.matches[0];
   return finalMatch?.winner;
 }
 
 function getLosersFinalist(finalRound: any) {
+  if (!finalRound || !finalRound.matches || !Array.isArray(finalRound.matches) || finalRound.matches.length === 0) {
+    return null;
+  }
   const finalMatch = finalRound.matches[0];
   return finalMatch?.winner;
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -20,7 +21,8 @@ import {
   ArrowLeft,
   Save,
   Upload,
-  Crown
+  Crown,
+  FileText
 } from 'lucide-react'
 
 export default function EditProfilePage() {
@@ -31,6 +33,7 @@ export default function EditProfilePage() {
     username: '',
     email: '',
     phone: '',
+    description: '',
     language: 'en'
   })
   const [selectedAvatar, setSelectedAvatar] = useState('')
@@ -56,6 +59,7 @@ export default function EditProfilePage() {
         username: user.username,
         email: user.email,
         phone: user.phone || '',
+        description: user.description || '',
         language: user.language
       })
       setSelectedAvatar(user.avatar || '/clash-royale-avatar.png')
@@ -349,6 +353,24 @@ export default function EditProfilePage() {
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description" className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Personal Information
+                    </Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Tell us about yourself..."
+                      value={formData.description}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      rows={4}
+                      className="resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This information will be visible on your public profile
+                    </p>
                   </div>
 
                   <div className="space-y-2">

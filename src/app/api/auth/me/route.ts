@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
+import * as jwt from 'jsonwebtoken'
 import { db } from '@/lib/db'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         username: true,
         name: true,
         phone: true,
+        description: true,
         role: true,
         language: true,
         avatar: true,

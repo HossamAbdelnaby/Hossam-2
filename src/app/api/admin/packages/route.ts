@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { packageType, price, currency } = body;
+    const { packageType, price, currency, name, description, features, color, isActive } = body;
 
     if (!packageType || typeof price !== 'number' || price < 0) {
       return NextResponse.json(
@@ -67,8 +67,14 @@ export async function POST(request: NextRequest) {
     const newPackage = await db.packagePrice.create({
       data: {
         packageType,
+        name: name || '',
+        description: description || '',
         price,
         currency: currency || 'USD',
+        features: JSON.stringify(features || []),
+        color: color || '#3B82F6',
+        isActive: isActive !== undefined ? isActive : true,
+        isEditable: packageType !== 'FREE', // FREE package is not editable
         updatedBy: decoded.userId
       }
     });
@@ -79,7 +85,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE_PACKAGE_PRICE',
         targetId: newPackage.id,
         targetType: 'PackagePrice',
-        details: JSON.stringify({ packageType, price, currency }),
+        details: JSON.stringify({ packageType, price, currency, name, description, features, color, isActive }),
         userId: decoded.userId,
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown'

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +86,7 @@ export default function AvailableTournamentsPage() {
   });
 
   const { user } = useAuth();
+  const router = useRouter();
 
   const fetchTournaments = async (page: number = 1) => {
     try {
@@ -140,7 +142,7 @@ export default function AvailableTournamentsPage() {
 
   const handleRegisterClick = (tournament: Tournament) => {
     if (!user) {
-      window.location.href = '/login';
+      router.push('/login');
       return;
     }
     

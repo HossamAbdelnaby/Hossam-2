@@ -321,23 +321,25 @@ export default function CWLRegisterPage() {
         </Card>
 
         {/* Submit Button */}
-        <div className="flex justify-end gap-4">
+        <div className="flex justify-between items-center">
           <Button type="button" variant="outline" asChild>
             <Link href="/cwl">Cancel</Link>
           </Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Registering...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Register Clan
-              </>
-            )}
-          </Button>
+          <div className="flex gap-4">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Registering...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Register Clan
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </form>
     </div>

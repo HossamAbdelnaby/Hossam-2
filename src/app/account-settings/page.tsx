@@ -153,7 +153,10 @@ export default function AccountSettingsPage() {
       if (response.ok) {
         // Redirect to home page after account deletion
         router.push('/')
-        window.location.reload() // Force reload to clear auth state
+        // Force reload to clear auth state
+        setTimeout(() => {
+          window.location.reload()
+        }, 100)
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to delete account')
@@ -265,10 +268,6 @@ export default function AccountSettingsPage() {
                   <Separator />
                   
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Email:</span>
-                      <span className="font-medium">{user.email}</span>
-                    </div>
                     {user.phone && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Phone:</span>

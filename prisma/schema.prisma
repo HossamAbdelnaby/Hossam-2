@@ -20,6 +20,7 @@ model User {
   phone         String?
   avatar        String?
   photoUrl      String?
+  description   String?   // Personal information/bio
   role          UserRole  @default(USER)
   language      String    @default("en") // "en" or "ar"
   createdAt     DateTime  @default(now())
@@ -42,6 +43,7 @@ model User {
   permissions   UserPermission[]
   adminLogs     AdminLog[]
   registrationLogs RegistrationLog[]
+  pendingTournaments PendingTournament[]
 
   @@map("users")
 }
@@ -61,6 +63,12 @@ model Tournament {
   url             String?
   host            String
   prizeAmount     Float
+  currency        String            @default("USD")
+  paymentMethods   String?           // JSON array of accepted payment methods
+  paymentTerms    String?           // Payment terms and conditions
+  earlyBirdPrice  Float?            // Early bird registration price
+  regularPrice    Float?            // Regular registration price
+  latePrice       Float?            // Late registration price
   maxTeams        Int               @default(16)
   registrationStart DateTime
   registrationEnd   DateTime?
@@ -70,6 +78,7 @@ model Tournament {
   bracketType     BracketType
   packageType     TournamentPackage
   graphicRequests String?
+  tournamentLogo  String?           // Tournament logo URL
   rules           String?
   isActive        Boolean           @default(true)
   createdAt       DateTime          @default(now())
@@ -78,9 +87,9 @@ model Tournament {
   // Relations
   organizerId     String
   organizer       User              @relation(fields: [organizerId], references: [id])
+  payments        Payment[]
   teams           Team[]
   stages          TournamentStage[]
-  payments        Payment[]
   registrationLogs RegistrationLog[]
 
   @@map("tournaments")
@@ -227,6 +236,8 @@ model Pusher {
   trophies       Int
   realName       String
   profilePicture String?
+  description    String?
+  tagPlayer      String?
   price          Float
   paymentMethod  String
   negotiation    Boolean     @default(false)
@@ -284,21 +295,26 @@ enum ContractStatus {
 
 // CWL Clan Models
 model Clan {
-  id                String   @id @default(cuid())
+  id                String           @id @default(cuid())
   name              String
-  tag               String   @unique
-  playerCount       Int      @default(15)
+  tag               String           @unique
+  playerCount       Int              @default(15)
   offeredPayment    Float
+  paymentCurrency   String           @default("USD")
+  paymentMethods    String?           // JSON array of accepted payment methods
+  paymentTerms      String?          // Payment terms and conditions
+  paymentDueDate    DateTime?        // Payment due date for members
   terms             String?
-  leagueLevel       Int?     // CWL League Level
-  membersNeeded     Int      @default(1) // Number of members needed (1-15)
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  leagueLevel       Int?             // CWL League Level
+  membersNeeded     Int              @default(1) // Number of members needed (1-15)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   // Relations
   ownerId           String
-  owner             User           @relation(fields: [ownerId], references: [id])
+  owner             User             @relation(fields: [ownerId], references: [id])
+  payments          Payment[]
   members           ClanMember[]
   applications      ClanApplication[]
 
@@ -322,19 +338,24 @@ model ClanMember {
 }
 
 model ClanApplication {
-  id          String           @id @default(cuid())
-  name        String
-  playerTag   String
-  paymentMethod String
-  status      ApplicationStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id              String           @id @default(cuid())
+  name            String
+  playerTag       String
+  paymentMethod   String
+  paymentAmount   Float?
+  paymentStatus   PaymentStatus   @default(PENDING)
+  paymentDetails  String?          // JSON field for payment-specific details
+  notes           String?
+  status          ApplicationStatus @default(PENDING)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   // Relations
-  clanId      String
-  clan        Clan             @relation(fields: [clanId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User             @relation(fields: [userId], references: [id])
+  clanId          String
+  clan            Clan             @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  payments        Payment[]
 
   @@map("clan_applications")
 }
@@ -394,23 +415,37 @@ enum OrderStatus {
 
 // Payment Models
 model Payment {
-  id            String        @id @default(cuid())
-  amount        Float
-  method        PaymentMethod
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  amount          Float
+  type            PaymentType?
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  transactionId   String?
+  currency        String        @default("USD")
+  description     String?
+  paymentDetails  String?       // JSON field for payment-specific details
+  dueDate         DateTime?
+  completedAt     DateTime?
+  failureReason   String?
+  metadata        String?       // Additional metadata as JSON
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   // Relations
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
-  tournamentId  String?
-  tournament    Tournament?   @relation(fields: [tournamentId], references: [id])
-  contractId    String?       @unique
-  contract      Contract?     @relation(fields: [contractId], references: [id])
-  serviceOrderId String?      @unique
-  serviceOrder  ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  tournamentId    String?
+  tournament      Tournament?   @relation(fields: [tournamentId], references: [id])
+  clanId          String?
+  clan            Clan?         @relation(fields: [clanId], references: [id])
+  clanApplicationId String?
+  clanApplication ClanApplication? @relation(fields: [clanApplicationId], references: [id])
+  contractId      String?       @unique
+  contract        Contract?     @relation(fields: [contractId], references: [id])
+  serviceOrderId  String?       @unique
+  serviceOrder    ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+  pendingTournamentId String?   @unique
+  pendingTournament PendingTournament? @relation(fields: [pendingTournamentId], references: [id])
 
   @@map("payments")
 }
@@ -420,6 +455,10 @@ enum PaymentMethod {
   WESTERN_UNION
   BINANCE
   CREDIT_CARD
+  BANK_TRANSFER
+  CASH
+  CRYPTOCURRENCY
+  MOBILE_MONEY
 }
 
 enum PaymentStatus {
@@ -427,6 +466,15 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+enum PaymentType {
+  TOURNAMENT_FEE
+  CLAN_MEMBERSHIP
+  PLAYER_RENTAL
+  SERVICE_FEE
+  SUBSCRIPTION
+  DONATION
 }
 
 // Chat Models
@@ -502,13 +550,50 @@ model AdminConfig {
 model PackagePrice {
   id          String           @id @default(cuid())
   packageType TournamentPackage @unique
+  name        String           @default("")
+  description String           @default("")
   price       Float
   currency    String           @default("USD")
+  features    String           // JSON array of features
+  color       String           @default("#3B82F6") // Hex color code
   isActive    Boolean          @default(true)
+  isEditable  Boolean          @default(true)   // FREE package will be false
   updatedAt   DateTime         @updatedAt
   updatedBy   String
 
   @@map("package_prices")
+}
+
+// Pending Tournament Model (for paid packages before payment)
+model PendingTournament {
+  id              String           @id @default(cuid())
+  host            String
+  name            String
+  url             String?
+  description     String?
+  prizeAmount     Float            @default(0)
+  currency        String           @default("USD")
+  maxTeams        Int
+  registrationStart DateTime
+  registrationEnd   DateTime?
+  tournamentStart   DateTime
+  tournamentEnd     DateTime?
+  bracketType     BracketType
+  packageType     TournamentPackage
+  graphicRequests String?
+  tournamentLogo  String?          // Tournament logo URL
+  packagePrice    Float
+  packageCurrency String           @default("USD")
+  status          String           @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, CANCELLED, EXPIRED
+  organizerId     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  organizer       User             @relation(fields: [organizerId], references: [id])
+  payment         Payment?
+
+  @@map("pending_tournaments")
 }
 
 // Payment Gateway Model

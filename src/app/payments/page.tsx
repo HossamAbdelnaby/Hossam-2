@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +46,7 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { user } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     if (!user) return
@@ -255,7 +257,7 @@ export default function PaymentsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = `/payment?paymentId=${payment.id}`}
+                          onClick={() => router.push(`/payment?paymentId=${payment.id}`)}
                         >
                           Complete Payment
                         </Button>
@@ -263,7 +265,7 @@ export default function PaymentsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => window.location.href = `/payment?paymentId=${payment.id}`}
+                        onClick={() => router.push(`/payment?paymentId=${payment.id}`)}
                       >
                         <ExternalLink className="w-4 h-4" />
                       </Button>
